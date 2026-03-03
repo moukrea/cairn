@@ -431,7 +431,7 @@ dependencies = [
 
 [[package]]
 name = "cairn-p2p"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -474,7 +474,7 @@ dependencies = [
 
 [[package]]
 name = "cairn-relay"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "base64",
@@ -498,7 +498,7 @@ dependencies = [
 
 [[package]]
 name = "cairn-signal"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ciborium",
  "clap",

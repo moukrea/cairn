@@ -1,6 +1,6 @@
 [package]
 name = "cairn-signal"
-version = "0.1.0"
+version = "0.2.0"
 description = "WebSocket signaling server for cairn P2P connectivity"
 edition.workspace = true
 license.workspace = true
