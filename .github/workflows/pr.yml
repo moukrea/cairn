@@ -1,0 +1,115 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: pr-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.changes.outputs.rust }}
+      ts: ${{ steps.changes.outputs.ts }}
+      go: ${{ steps.changes.outputs.go }}
+      py: ${{ steps.changes.outputs.py }}
+      php: ${{ steps.changes.outputs.php }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect changed components
+        id: changes
+        run: bash .github/scripts/detect-changes.sh "origin/${{ github.base_ref }}"
+
+  test-rust:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format check
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy -p cairn-p2p -- -D warnings
+      - name: Test
+        run: cargo test -p cairn-p2p
+
+  test-ts:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.ts == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/ts/cairn-p2p
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: packages/ts/cairn-p2p/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+  test-go:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/go/cairn-p2p
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/go/cairn-p2p/go.mod
+          cache-dependency-path: packages/go/cairn-p2p/go.sum
+      - run: go vet ./...
+      - run: go test ./...
+
+  test-py:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.py == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/py/cairn-p2p
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install ".[dev]"
+      - run: ruff check
+      - run: pytest
+
+  test-php:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.php == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/php/cairn-p2p
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gmp, sodium
+          tools: composer
+      - run: composer install --no-interaction --prefer-dist
+      - run: composer lint
+      - run: composer check
+      - run: composer test

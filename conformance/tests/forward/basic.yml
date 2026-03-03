@@ -1,0 +1,78 @@
+# Store-and-forward basic delivery tests (Tier 2)
+# A sends to offline B via server S; B comes online, receives via ForwardDeliver
+
+scenarios:
+  - scenario: forward-basic-rust-ts
+    description: Rust sends to offline TypeScript via Rust server, delivered on reconnect
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: rust }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-sender-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-sender-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-recip-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-recip-psk" } }
+      - { type: disconnect, actor: recipient, params: {} }
+      - type: send_forward
+        actor: sender
+        params:
+          destination: recipient
+          via: server
+          payload_hex: "666f72776172646564206d657373616765"
+      - { type: wait, params: { duration_ms: 1000 } }
+      - { type: reconnect, actor: recipient, params: {} }
+    expected:
+      - { type: message_received, actor: recipient, params: { payload_hex: "666f72776172646564206d657373616765" } }
+      - { type: status, actor: server, params: { forward_delivered: true } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: forward-basic-go-py
+    description: Go sends to offline Python via Rust server
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: go }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-go-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-go-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-py-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-py-psk" } }
+      - { type: disconnect, actor: recipient, params: {} }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "676f20746f20707974686f6e" } }
+      - { type: wait, params: { duration_ms: 1000 } }
+      - { type: reconnect, actor: recipient, params: {} }
+    expected:
+      - { type: message_received, actor: recipient, params: { payload_hex: "676f20746f20707974686f6e" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: forward-basic-ts-php
+    description: TypeScript sends to offline PHP via Rust server
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: ts }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-ts-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-ts-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-php-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-php-psk" } }
+      - { type: disconnect, actor: recipient, params: {} }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "747320746f20706870" } }
+      - { type: wait, params: { duration_ms: 1000 } }
+      - { type: reconnect, actor: recipient, params: {} }
+    expected:
+      - { type: message_received, actor: recipient, params: { payload_hex: "747320746f20706870" } }
+    timeout_ms: 30000
+    budget_ms: 30000

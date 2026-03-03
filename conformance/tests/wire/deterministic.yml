@@ -1,0 +1,74 @@
+# Deterministic CBOR encoding verification
+# Messages input to HMAC or signature must use RFC 8949 section 4.2 deterministic encoding
+# All implementations must produce byte-identical output for the same logical message
+
+scenarios:
+  - scenario: wire-deterministic-signed
+    description: Signed messages produce byte-identical CBOR across all implementations
+    tier: 0
+    category: wire
+    participants:
+      - { role: impl_rust, lang: rust }
+      - { role: impl_ts, lang: ts }
+      - { role: impl_go, lang: go }
+      - { role: impl_py, lang: py }
+      - { role: impl_php, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_cbor
+        actor: impl_rust
+        params:
+          operation: deterministic_encode
+          message_type: 0x0100
+          fields:
+            version: { major: 1, minor: 0 }
+            type: 0x0100
+            msg_id_hex: "0192b5a07c4870008000000000000001"
+            payload_hex: "a16474657374"
+      - type: verify_cbor
+        actor: impl_ts
+        params: { operation: deterministic_encode, message_type: 0x0100, fields: { version: { major: 1, minor: 0 }, type: 0x0100, msg_id_hex: "0192b5a07c4870008000000000000001", payload_hex: "a16474657374" } }
+      - type: verify_cbor
+        actor: impl_go
+        params: { operation: deterministic_encode, message_type: 0x0100, fields: { version: { major: 1, minor: 0 }, type: 0x0100, msg_id_hex: "0192b5a07c4870008000000000000001", payload_hex: "a16474657374" } }
+      - type: verify_cbor
+        actor: impl_py
+        params: { operation: deterministic_encode, message_type: 0x0100, fields: { version: { major: 1, minor: 0 }, type: 0x0100, msg_id_hex: "0192b5a07c4870008000000000000001", payload_hex: "a16474657374" } }
+      - type: verify_cbor
+        actor: impl_php
+        params: { operation: deterministic_encode, message_type: 0x0100, fields: { version: { major: 1, minor: 0 }, type: 0x0100, msg_id_hex: "0192b5a07c4870008000000000000001", payload_hex: "a16474657374" } }
+    expected:
+      - type: cbor_match
+        params:
+          description: "All 5 implementations produce byte-identical CBOR output"
+          rule: "RFC 8949 section 4.2 deterministic encoding"
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: wire-deterministic-hmac
+    description: HMAC'd messages produce identical bytes for HMAC computation input
+    tier: 0
+    category: wire
+    participants:
+      - { role: impl_a, lang: any }
+      - { role: impl_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_cbor
+        actor: impl_a
+        params:
+          operation: deterministic_encode
+          for_hmac: true
+          message_type: 0x0200
+      - type: verify_cbor
+        actor: impl_b
+        params:
+          operation: deterministic_encode
+          for_hmac: true
+          message_type: 0x0200
+    expected:
+      - type: cbor_match
+        params:
+          description: "HMAC input bytes match between implementations"
+    timeout_ms: 2000
+    budget_ms: 2000

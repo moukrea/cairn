@@ -1,0 +1,120 @@
+# Store-and-forward complete cycle tests — offline peer, ordering, dedup, purge
+# Validates: multi-message queuing, message ordering, deduplication, FORWARD_PURGE
+
+scenarios:
+  - scenario: forward-multi-message-ordering
+    description: Multiple messages queued while recipient offline, delivered in order on reconnect
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: rust }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-order-sender-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-order-sender-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-order-recip-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-order-recip-psk" } }
+      - { type: establish_session, actor: sender, params: { target: server } }
+      - { type: establish_session, actor: recipient, params: { target: server } }
+      # Disconnect recipient
+      - { type: disconnect, actor: recipient }
+      # Send 3 messages while recipient offline
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "6d736731" } }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "6d736732" } }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "6d736733" } }
+      - { type: wait, params: { duration_ms: 1000 } }
+      # Reconnect recipient
+      - { type: reconnect, actor: recipient }
+    expected:
+      - { type: message_received, actor: recipient, params: { payload_hex: "6d736731", order: 0 } }
+      - { type: message_received, actor: recipient, params: { payload_hex: "6d736732", order: 1 } }
+      - { type: message_received, actor: recipient, params: { payload_hex: "6d736733", order: 2 } }
+      - { type: status, params: { messages_in_order: true, total_delivered: 3 } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: forward-deduplication
+    description: Server deduplicates re-sent messages with same msg_id
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: go }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-dedup-sender-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-dedup-sender-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-dedup-recip-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-dedup-recip-psk" } }
+      - { type: establish_session, actor: sender, params: { target: server } }
+      - { type: establish_session, actor: recipient, params: { target: server } }
+      - { type: disconnect, actor: recipient }
+      # Send message, then re-send with same msg_id
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "64656475702074657374", msg_id_hex: "0192b5a07c4870008000000000000042" } }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "64656475702074657374", msg_id_hex: "0192b5a07c4870008000000000000042" } }
+      - { type: wait, params: { duration_ms: 1000 } }
+      - { type: reconnect, actor: recipient }
+    expected:
+      - { type: message_received, actor: recipient, params: { payload_hex: "64656475702074657374", count: 1 } }
+      - { type: status, params: { deduplicated: true, description: "Recipient received exactly 1 copy" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: forward-purge-after-delivery
+    description: FORWARD_PURGE sent after successful delivery, server clears queue
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: ts }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: rust }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-purge-sender-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-purge-sender-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-purge-recip-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-purge-recip-psk" } }
+      - { type: establish_session, actor: sender, params: { target: server } }
+      - { type: establish_session, actor: recipient, params: { target: server } }
+      - { type: disconnect, actor: recipient }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "7075726765207465737" } }
+      - { type: wait, params: { duration_ms: 1000 } }
+      - { type: reconnect, actor: recipient }
+    expected:
+      - { type: message_received, actor: recipient, params: { payload_hex: "7075726765207465737" } }
+      - { type: message_sent, actor: recipient, params: { msg_type: "0x0702", description: "FORWARD_DELIVER acknowledgment" } }
+      - { type: message_sent, actor: recipient, params: { msg_type: "0x0703", description: "FORWARD_PURGE sent to server" } }
+      - { type: status, actor: server, params: { queue_empty: true, description: "Server queue cleared after purge" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: forward-cross-lang-complete-cycle
+    description: "Go sender -> Rust server -> PHP recipient: full offline/online store-forward cycle"
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: go }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-cross-sender-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-cross-sender-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-cross-recip-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-cross-recip-psk" } }
+      - { type: establish_session, actor: sender, params: { target: server } }
+      - { type: establish_session, actor: recipient, params: { target: server } }
+      - { type: disconnect, actor: recipient }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "676f2d72757374" } }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "7365727665722d706870" } }
+      - { type: wait, params: { duration_ms: 1000 } }
+      - { type: reconnect, actor: recipient }
+    expected:
+      - { type: message_received, actor: recipient, params: { payload_hex: "676f2d72757374", order: 0 } }
+      - { type: message_received, actor: recipient, params: { payload_hex: "7365727665722d706870", order: 1 } }
+      - { type: status, params: { messages_in_order: true, total_delivered: 2 } }
+    timeout_ms: 30000
+    budget_ms: 30000

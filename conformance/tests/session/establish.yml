@@ -1,0 +1,184 @@
+# Session establishment interop tests — all 10 language pairs
+# Validates: Noise XX handshake completion, UUID v7 session ID, Double Ratchet init
+
+scenarios:
+  - scenario: session-establish-rust-ts
+    description: Session establishment between Rust and TypeScript
+    tier: 0
+    category: session
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: pair, actor: responder, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: establish_session, actor: initiator, params: {} }
+    expected:
+      - { type: session_state, actor: initiator, params: { state: Connected } }
+      - { type: session_state, actor: responder, params: { state: Connected } }
+      - { type: status, params: { session_id_format: uuid_v7, ratchet_initialized: true } }
+    timeout_ms: 10000
+    budget_ms: 10000
+
+  - scenario: session-establish-rust-go
+    description: Session establishment between Rust and Go
+    tier: 0
+    category: session
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: pair, actor: responder, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: establish_session, actor: initiator, params: {} }
+    expected:
+      - { type: session_state, actor: initiator, params: { state: Connected } }
+      - { type: session_state, actor: responder, params: { state: Connected } }
+    timeout_ms: 10000
+    budget_ms: 10000
+
+  - scenario: session-establish-rust-py
+    description: Session establishment between Rust and Python
+    tier: 0
+    category: session
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: pair, actor: responder, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: establish_session, actor: initiator, params: {} }
+    expected:
+      - { type: session_state, actor: initiator, params: { state: Connected } }
+      - { type: session_state, actor: responder, params: { state: Connected } }
+    timeout_ms: 10000
+    budget_ms: 10000
+
+  - scenario: session-establish-rust-php
+    description: Session establishment between Rust and PHP
+    tier: 0
+    category: session
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: pair, actor: responder, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: establish_session, actor: initiator, params: {} }
+    expected:
+      - { type: session_state, actor: initiator, params: { state: Connected } }
+      - { type: session_state, actor: responder, params: { state: Connected } }
+    timeout_ms: 10000
+    budget_ms: 10000
+
+  - scenario: session-establish-ts-go
+    description: Session establishment between TypeScript and Go
+    tier: 0
+    category: session
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: pair, actor: responder, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: establish_session, actor: initiator, params: {} }
+    expected:
+      - { type: session_state, actor: initiator, params: { state: Connected } }
+      - { type: session_state, actor: responder, params: { state: Connected } }
+    timeout_ms: 10000
+    budget_ms: 10000
+
+  - scenario: session-establish-ts-py
+    description: Session establishment between TypeScript and Python
+    tier: 0
+    category: session
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: pair, actor: responder, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: establish_session, actor: initiator, params: {} }
+    expected:
+      - { type: session_state, actor: initiator, params: { state: Connected } }
+      - { type: session_state, actor: responder, params: { state: Connected } }
+    timeout_ms: 10000
+    budget_ms: 10000
+
+  - scenario: session-establish-ts-php
+    description: Session establishment between TypeScript and PHP
+    tier: 0
+    category: session
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: pair, actor: responder, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: establish_session, actor: initiator, params: {} }
+    expected:
+      - { type: session_state, actor: initiator, params: { state: Connected } }
+      - { type: session_state, actor: responder, params: { state: Connected } }
+    timeout_ms: 10000
+    budget_ms: 10000
+
+  - scenario: session-establish-go-py
+    description: Session establishment between Go and Python
+    tier: 0
+    category: session
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: pair, actor: responder, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: establish_session, actor: initiator, params: {} }
+    expected:
+      - { type: session_state, actor: initiator, params: { state: Connected } }
+      - { type: session_state, actor: responder, params: { state: Connected } }
+    timeout_ms: 10000
+    budget_ms: 10000
+
+  - scenario: session-establish-go-php
+    description: Session establishment between Go and PHP
+    tier: 0
+    category: session
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: pair, actor: responder, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: establish_session, actor: initiator, params: {} }
+    expected:
+      - { type: session_state, actor: initiator, params: { state: Connected } }
+      - { type: session_state, actor: responder, params: { state: Connected } }
+    timeout_ms: 10000
+    budget_ms: 10000
+
+  - scenario: session-establish-py-php
+    description: Session establishment between Python and PHP
+    tier: 0
+    category: session
+    participants:
+      - { role: initiator, lang: py }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: pair, actor: responder, params: { mechanism: psk, flow: initiation, psk: "test-session-est-psk" } }
+      - { type: establish_session, actor: initiator, params: {} }
+    expected:
+      - { type: session_state, actor: initiator, params: { state: Connected } }
+      - { type: session_state, actor: responder, params: { state: Connected } }
+    timeout_ms: 10000
+    budget_ms: 10000

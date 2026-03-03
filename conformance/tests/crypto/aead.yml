@@ -1,0 +1,96 @@
+# AEAD cipher interop tests
+# AES-256-GCM and ChaCha20-Poly1305 produce identical ciphertext+tag
+# for identical key/nonce/plaintext/AAD across all implementations
+
+scenarios:
+  - scenario: crypto-aead-aes256gcm
+    description: AES-256-GCM produces identical ciphertext across implementations
+    tier: 0
+    category: crypto
+    participants:
+      - { role: impl_a, lang: any }
+      - { role: impl_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: impl_a
+        params:
+          operation: aead_encrypt
+          fixture: fixtures/keys/aead-vectors.cbor
+          cipher: aes_256_gcm
+      - type: verify_crypto
+        actor: impl_b
+        params:
+          operation: aead_encrypt
+          fixture: fixtures/keys/aead-vectors.cbor
+          cipher: aes_256_gcm
+    expected:
+      - { type: crypto_match, params: { description: "AES-256-GCM ciphertext+tag matches" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: crypto-aead-chacha20
+    description: ChaCha20-Poly1305 produces identical ciphertext across implementations
+    tier: 0
+    category: crypto
+    participants:
+      - { role: impl_a, lang: any }
+      - { role: impl_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: impl_a
+        params:
+          operation: aead_encrypt
+          fixture: fixtures/keys/aead-vectors.cbor
+          cipher: chacha20_poly1305
+      - type: verify_crypto
+        actor: impl_b
+        params:
+          operation: aead_encrypt
+          fixture: fixtures/keys/aead-vectors.cbor
+          cipher: chacha20_poly1305
+    expected:
+      - { type: crypto_match, params: { description: "ChaCha20-Poly1305 ciphertext+tag matches" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: crypto-aead-cross-decrypt
+    description: Ciphertext from impl A decrypted correctly by impl B for both ciphers
+    tier: 0
+    category: crypto
+    participants:
+      - { role: encryptor, lang: any }
+      - { role: decryptor, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: encryptor
+        params:
+          operation: aead_encrypt
+          fixture: fixtures/keys/aead-vectors.cbor
+          cipher: aes_256_gcm
+          plaintext_hex: "74657374207061796c6f6164"
+      - type: verify_crypto
+        actor: decryptor
+        params:
+          operation: aead_decrypt
+          cipher: aes_256_gcm
+          ciphertext_source: encryptor
+      - type: verify_crypto
+        actor: encryptor
+        params:
+          operation: aead_encrypt
+          fixture: fixtures/keys/aead-vectors.cbor
+          cipher: chacha20_poly1305
+          plaintext_hex: "74657374207061796c6f6164"
+      - type: verify_crypto
+        actor: decryptor
+        params:
+          operation: aead_decrypt
+          cipher: chacha20_poly1305
+          ciphertext_source: encryptor
+    expected:
+      - { type: crypto_match, params: { description: "Cross-implementation AEAD decrypt succeeds for both ciphers" } }
+    timeout_ms: 2000
+    budget_ms: 2000

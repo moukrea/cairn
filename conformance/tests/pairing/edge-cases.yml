@@ -1,0 +1,195 @@
+# Pairing edge-case tests — rate limiting, expiry, rejection, unpairing
+# Tests cover spec requirements for pairing security boundaries
+
+scenarios:
+  # Rate limiting: 5 attempts / 30s window, auto-invalidation after 10 failures
+  - scenario: pair-rate-limit
+    description: Verify pairing rate limit — 6th attempt within 30s is rejected
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: any }
+      - { role: responder, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation, attempt: 1, deliberate_fail: true }
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation, attempt: 2, deliberate_fail: true }
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation, attempt: 3, deliberate_fail: true }
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation, attempt: 4, deliberate_fail: true }
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation, attempt: 5, deliberate_fail: true }
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation, attempt: 6 }
+    expected:
+      - type: error
+        actor: initiator
+        params:
+          error_type: PairingRejected
+          description: "6th attempt within 30s window is rate-limited"
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  # Auto-invalidation after 10 failures
+  - scenario: pair-auto-invalidate
+    description: Verify pairing auto-invalidation after 10 consecutive failures
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: any }
+      - { role: responder, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation, rapid_fail_count: 10 }
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation, attempt: 11 }
+    expected:
+      - type: error
+        actor: initiator
+        params:
+          error_type: PairingRejected
+          description: "Pairing auto-invalidated after 10 failures"
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  # Progressive delay: 2s delay after rate limit
+  - scenario: pair-progressive-delay
+    description: Verify 2s progressive delay is applied after rate limit
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: any }
+      - { role: responder, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation, rapid_fail_count: 5 }
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation, measure_delay: true }
+    expected:
+      - type: status
+        actor: initiator
+        params:
+          min_delay_ms: 2000
+          description: "Progressive delay of at least 2s applied"
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  # Expiry: pairing payload rejected after 5-minute default
+  - scenario: pair-expiry-rejection
+    description: Verify pairing payload is rejected after 5-minute expiry
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: any }
+      - { role: responder, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: pin
+          flow: initiation
+          simulate_expiry: true
+          age_seconds: 301
+      - type: pair
+        actor: responder
+        params:
+          mechanism: pin
+          flow: initiation
+          pin_source: initiator
+    expected:
+      - type: error
+        actor: responder
+        params:
+          error_type: PairingExpired
+          description: "Payload older than 5 minutes is rejected"
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  # PairReject: rejection message handled correctly
+  - scenario: pair-reject-handling
+    description: Verify PairReject message is handled and pairing terminates cleanly
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: any }
+      - { role: responder, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: qr, flow: initiation }
+      - type: pair
+        actor: responder
+        params:
+          mechanism: qr
+          flow: initiation
+          payload_source: initiator
+          action: reject
+    expected:
+      - type: error
+        actor: initiator
+        params:
+          error_type: PairingRejected
+          description: "Responder sent PairReject, initiator handles cleanly"
+      - type: status
+        actor: responder
+        params:
+          pairing: rejected
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  # Unpairing: PairRevoke sent, local state deleted, subsequent auth fails
+  - scenario: pair-unpair-revoke
+    description: Verify unpairing via PairRevoke — trust deleted, auth fails afterward
+    tier: 0
+    category: pairing
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      # First, pair successfully
+      - type: pair
+        actor: peer_a
+        params: { mechanism: psk, flow: initiation, psk: "test-unpair-psk" }
+      - type: pair
+        actor: peer_b
+        params: { mechanism: psk, flow: initiation, psk: "test-unpair-psk" }
+      # Now unpair
+      - type: unpair
+        actor: peer_a
+        params:
+          target: peer_b
+      # Attempt to reconnect — should fail
+      - type: establish_session
+        actor: peer_a
+        params: {}
+    expected:
+      - type: status
+        actor: peer_a
+        params:
+          trust_store: empty
+          description: "Local trust state deleted after PairRevoke"
+      - type: error
+        actor: peer_a
+        params:
+          error_type: AuthenticationFailed
+          description: "Session establishment fails after unpairing"
+    timeout_ms: 30000
+    budget_ms: 30000

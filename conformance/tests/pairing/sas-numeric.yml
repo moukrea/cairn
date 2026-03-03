@@ -1,0 +1,186 @@
+# Numeric SAS pairing interop tests — all 10 language pairs
+# Mechanism: Numeric SAS (6-digit code from handshake transcript)
+# Flow: Standard (verification)
+# Validates: 6-digit SAS code matches on both sides, HKDF->4bytes->u32 mod 1000000
+
+scenarios:
+  - scenario: pair-sas-numeric-rust-ts
+    description: Numeric Sas pairing between RUST and TypeScript
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: numeric_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: numeric_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "6-digit SAS code matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-numeric-rust-go
+    description: Numeric Sas pairing between RUST and GO
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: numeric_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: numeric_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "6-digit SAS code matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-numeric-rust-py
+    description: Numeric Sas pairing between RUST and PY
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: numeric_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: numeric_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "6-digit SAS code matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-numeric-rust-php
+    description: Numeric Sas pairing between RUST and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: numeric_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: numeric_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "6-digit SAS code matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-numeric-ts-go
+    description: Numeric Sas pairing between TypeScript and GO
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: numeric_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: numeric_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "6-digit SAS code matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-numeric-ts-py
+    description: Numeric Sas pairing between TypeScript and PY
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: numeric_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: numeric_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "6-digit SAS code matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-numeric-ts-php
+    description: Numeric Sas pairing between TypeScript and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: numeric_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: numeric_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "6-digit SAS code matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-numeric-go-py
+    description: Numeric Sas pairing between GO and PY
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: numeric_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: numeric_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "6-digit SAS code matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-numeric-go-php
+    description: Numeric Sas pairing between GO and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: numeric_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: numeric_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "6-digit SAS code matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-numeric-py-php
+    description: Numeric Sas pairing between PY and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: py }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: numeric_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: numeric_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "6-digit SAS code matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+

@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<ruleset name="cairn-php">
+    <description>cairn PHP coding standard</description>
+    <file>src/</file>
+    <rule ref="PSR12">
+        <exclude name="Generic.Files.OneObjectStructurePerFile"/>
+        <exclude name="Generic.Files.OneClassPerFile"/>
+        <exclude name="Generic.Files.OneInterfacePerFile"/>
+        <exclude name="Generic.Files.OneTraitPerFile"/>
+        <exclude name="PSR1.Files.SideEffects"/>
+        <exclude name="PSR1.Classes.ClassDeclaration.MultipleClasses"/>
+        <exclude name="PSR12.Files.FileHeader.IncorrectOrder"/>
+        <exclude name="PSR12.Files.FileHeader.SpacingAfterBlock"/>
+    </rule>
+    <rule ref="Generic.Files.LineLength">
+        <properties>
+            <property name="lineLimit" value="150"/>
+            <property name="absoluteLineLimit" value="0"/>
+        </properties>
+    </rule>
+</ruleset>

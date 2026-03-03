@@ -1,0 +1,455 @@
+{
+  "description": "CBOR encoding vectors for all 30 cairn message type codes. Each vector encodes a minimal envelope with the given message type.",
+  "vectors": [
+    {
+      "description": "VERSION_NEGOTIATE (0x0001) — version category",
+      "expected_output": {
+        "category": "version",
+        "cbor_hex": "a40001010102500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-version_negotiate",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0001",
+        "msg_type_name": "VERSION_NEGOTIATE",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "PAIR_REQUEST (0x0100) — pairing category",
+      "expected_output": {
+        "category": "pairing",
+        "cbor_hex": "a400010119010002500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-pair_request",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0100",
+        "msg_type_name": "PAIR_REQUEST",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "PAIR_CHALLENGE (0x0101) — pairing category",
+      "expected_output": {
+        "category": "pairing",
+        "cbor_hex": "a400010119010102500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-pair_challenge",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0101",
+        "msg_type_name": "PAIR_CHALLENGE",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "PAIR_RESPONSE (0x0102) — pairing category",
+      "expected_output": {
+        "category": "pairing",
+        "cbor_hex": "a400010119010202500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-pair_response",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0102",
+        "msg_type_name": "PAIR_RESPONSE",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "PAIR_CONFIRM (0x0103) — pairing category",
+      "expected_output": {
+        "category": "pairing",
+        "cbor_hex": "a400010119010302500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-pair_confirm",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0103",
+        "msg_type_name": "PAIR_CONFIRM",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "PAIR_REJECT (0x0104) — pairing category",
+      "expected_output": {
+        "category": "pairing",
+        "cbor_hex": "a400010119010402500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-pair_reject",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0104",
+        "msg_type_name": "PAIR_REJECT",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "PAIR_REVOKE (0x0105) — pairing category",
+      "expected_output": {
+        "category": "pairing",
+        "cbor_hex": "a400010119010502500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-pair_revoke",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0105",
+        "msg_type_name": "PAIR_REVOKE",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "SESSION_RESUME (0x0200) — session category",
+      "expected_output": {
+        "category": "session",
+        "cbor_hex": "a400010119020002500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-session_resume",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0200",
+        "msg_type_name": "SESSION_RESUME",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "SESSION_RESUME_ACK (0x0201) — session category",
+      "expected_output": {
+        "category": "session",
+        "cbor_hex": "a400010119020102500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-session_resume_ack",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0201",
+        "msg_type_name": "SESSION_RESUME_ACK",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "SESSION_EXPIRED (0x0202) — session category",
+      "expected_output": {
+        "category": "session",
+        "cbor_hex": "a400010119020202500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-session_expired",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0202",
+        "msg_type_name": "SESSION_EXPIRED",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "SESSION_CLOSE (0x0203) — session category",
+      "expected_output": {
+        "category": "session",
+        "cbor_hex": "a400010119020302500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-session_close",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0203",
+        "msg_type_name": "SESSION_CLOSE",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "DATA_MESSAGE (0x0300) — data category",
+      "expected_output": {
+        "category": "data",
+        "cbor_hex": "a400010119030002500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-data_message",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0300",
+        "msg_type_name": "DATA_MESSAGE",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "DATA_ACK (0x0301) — data category",
+      "expected_output": {
+        "category": "data",
+        "cbor_hex": "a400010119030102500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-data_ack",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0301",
+        "msg_type_name": "DATA_ACK",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "DATA_NACK (0x0302) — data category",
+      "expected_output": {
+        "category": "data",
+        "cbor_hex": "a400010119030202500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-data_nack",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0302",
+        "msg_type_name": "DATA_NACK",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "CHANNEL_INIT (0x0303) — data category",
+      "expected_output": {
+        "category": "data",
+        "cbor_hex": "a400010119030302500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-channel_init",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0303",
+        "msg_type_name": "CHANNEL_INIT",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "HEARTBEAT (0x0400) — control category",
+      "expected_output": {
+        "category": "control",
+        "cbor_hex": "a400010119040002500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-heartbeat",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0400",
+        "msg_type_name": "HEARTBEAT",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "HEARTBEAT_ACK (0x0401) — control category",
+      "expected_output": {
+        "category": "control",
+        "cbor_hex": "a400010119040102500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-heartbeat_ack",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0401",
+        "msg_type_name": "HEARTBEAT_ACK",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "TRANSPORT_MIGRATE (0x0402) — control category",
+      "expected_output": {
+        "category": "control",
+        "cbor_hex": "a400010119040202500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-transport_migrate",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0402",
+        "msg_type_name": "TRANSPORT_MIGRATE",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "TRANSPORT_MIGRATE_ACK (0x0403) — control category",
+      "expected_output": {
+        "category": "control",
+        "cbor_hex": "a400010119040302500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-transport_migrate_ack",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0403",
+        "msg_type_name": "TRANSPORT_MIGRATE_ACK",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "ROUTE_REQUEST (0x0500) — mesh category",
+      "expected_output": {
+        "category": "mesh",
+        "cbor_hex": "a400010119050002500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-route_request",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0500",
+        "msg_type_name": "ROUTE_REQUEST",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "ROUTE_RESPONSE (0x0501) — mesh category",
+      "expected_output": {
+        "category": "mesh",
+        "cbor_hex": "a400010119050102500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-route_response",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0501",
+        "msg_type_name": "ROUTE_RESPONSE",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "RELAY_DATA (0x0502) — mesh category",
+      "expected_output": {
+        "category": "mesh",
+        "cbor_hex": "a400010119050202500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-relay_data",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0502",
+        "msg_type_name": "RELAY_DATA",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "RELAY_ACK (0x0503) — mesh category",
+      "expected_output": {
+        "category": "mesh",
+        "cbor_hex": "a400010119050302500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-relay_ack",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0503",
+        "msg_type_name": "RELAY_ACK",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "RENDEZVOUS_PUBLISH (0x0600) — rendezvous category",
+      "expected_output": {
+        "category": "rendezvous",
+        "cbor_hex": "a400010119060002500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-rendezvous_publish",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0600",
+        "msg_type_name": "RENDEZVOUS_PUBLISH",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "RENDEZVOUS_QUERY (0x0601) — rendezvous category",
+      "expected_output": {
+        "category": "rendezvous",
+        "cbor_hex": "a400010119060102500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-rendezvous_query",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0601",
+        "msg_type_name": "RENDEZVOUS_QUERY",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "RENDEZVOUS_RESPONSE (0x0602) — rendezvous category",
+      "expected_output": {
+        "category": "rendezvous",
+        "cbor_hex": "a400010119060202500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-rendezvous_response",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0602",
+        "msg_type_name": "RENDEZVOUS_RESPONSE",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "FORWARD_REQUEST (0x0700) — forward category",
+      "expected_output": {
+        "category": "forward",
+        "cbor_hex": "a400010119070002500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-forward_request",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0700",
+        "msg_type_name": "FORWARD_REQUEST",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "FORWARD_ACK (0x0701) — forward category",
+      "expected_output": {
+        "category": "forward",
+        "cbor_hex": "a400010119070102500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-forward_ack",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0701",
+        "msg_type_name": "FORWARD_ACK",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "FORWARD_DELIVER (0x0702) — forward category",
+      "expected_output": {
+        "category": "forward",
+        "cbor_hex": "a400010119070202500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-forward_deliver",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0702",
+        "msg_type_name": "FORWARD_DELIVER",
+        "payload_hex": "",
+        "version": 1
+      }
+    },
+    {
+      "description": "FORWARD_PURGE (0x0703) — forward category",
+      "expected_output": {
+        "category": "forward",
+        "cbor_hex": "a400010119070302500193a54d0000700080000000000000010440"
+      },
+      "id": "msg-type-forward_purge",
+      "input": {
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type_code": "0x0703",
+        "msg_type_name": "FORWARD_PURGE",
+        "payload_hex": "",
+        "version": 1
+      }
+    }
+  ]
+}

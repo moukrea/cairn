@@ -1,0 +1,37 @@
+{
+  "description": "Pre-shared key test vectors for cairn pairing conformance",
+  "vectors": [
+    {
+      "psk_hex": "0123456789abcdef0123456789abcdef",
+      "entropy_bits": 128,
+      "comment": "Minimum 128-bit PSK"
+    },
+    {
+      "psk_hex": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "entropy_bits": 256,
+      "comment": "256-bit PSK for long-lived pairing"
+    },
+    {
+      "psk_hex": "0123456789abcdef",
+      "entropy_bits": 64,
+      "valid": false,
+      "comment": "Below 128-bit minimum — must be rejected"
+    },
+    {
+      "psk_hex": "ffffffffffffffffffffffffffffffff",
+      "entropy_bits": 128,
+      "comment": "All-ones 128-bit PSK — valid edge case"
+    },
+    {
+      "psk_hex": "00000000000000000000000000000000",
+      "entropy_bits": 128,
+      "comment": "All-zeros 128-bit PSK — valid but weak"
+    },
+    {
+      "psk_hex": "",
+      "entropy_bits": 0,
+      "valid": false,
+      "comment": "Empty PSK — must be rejected"
+    }
+  ]
+}

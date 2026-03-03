@@ -1,0 +1,87 @@
+# Message queue tests — queuing during disconnection
+# Validates: FIFO ordering, max 1000 messages, 1h max age, delivery on resume
+
+scenarios:
+  - scenario: session-queue-fifo
+    description: Queued messages delivered in FIFO order on resume
+    tier: 0
+    category: session
+    participants:
+      - { role: sender, lang: any }
+      - { role: receiver, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-queue-psk" } }
+      - { type: pair, actor: receiver, params: { mechanism: psk, flow: initiation, psk: "test-queue-psk" } }
+      - { type: establish_session, actor: sender, params: {} }
+      - { type: disconnect, actor: receiver, params: {} }
+      - { type: send_data, actor: sender, params: { channel: chat, payload_hex: "6d736731", queued: true } }
+      - { type: send_data, actor: sender, params: { channel: chat, payload_hex: "6d736732", queued: true } }
+      - { type: send_data, actor: sender, params: { channel: chat, payload_hex: "6d736733", queued: true } }
+      - { type: reconnect, actor: receiver, params: {} }
+    expected:
+      - type: message_received
+        actor: receiver
+        params:
+          channel: chat
+          messages_in_order:
+            - "6d736731"
+            - "6d736732"
+            - "6d736733"
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-queue-max-cap
+    description: Queue cap at 1000 messages — oldest dropped when exceeded
+    tier: 0
+    category: session
+    participants:
+      - { role: sender, lang: any }
+      - { role: receiver, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-queue-cap-psk" } }
+      - { type: pair, actor: receiver, params: { mechanism: psk, flow: initiation, psk: "test-queue-cap-psk" } }
+      - { type: establish_session, actor: sender, params: {} }
+      - { type: disconnect, actor: receiver, params: {} }
+      - type: send_data
+        actor: sender
+        params:
+          channel: chat
+          bulk_count: 1001
+          queued: true
+      - { type: reconnect, actor: receiver, params: {} }
+    expected:
+      - type: status
+        actor: sender
+        params:
+          queue_size_max: 1000
+          oldest_dropped: true
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: session-queue-max-age
+    description: Messages older than 1h max age are purged from queue
+    tier: 0
+    category: session
+    participants:
+      - { role: sender, lang: any }
+      - { role: receiver, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-queue-age-psk" } }
+      - { type: pair, actor: receiver, params: { mechanism: psk, flow: initiation, psk: "test-queue-age-psk" } }
+      - { type: establish_session, actor: sender, params: {} }
+      - { type: disconnect, actor: receiver, params: {} }
+      - { type: send_data, actor: sender, params: { channel: chat, payload_hex: "6f6c64206d7367", queued: true, simulate_age_minutes: 61 } }
+      - { type: send_data, actor: sender, params: { channel: chat, payload_hex: "6e6577206d7367", queued: true } }
+      - { type: reconnect, actor: receiver, params: {} }
+    expected:
+      - type: message_received
+        actor: receiver
+        params:
+          channel: chat
+          payload_hex: "6e6577206d7367"
+          old_message_purged: true
+    timeout_ms: 15000
+    budget_ms: 15000

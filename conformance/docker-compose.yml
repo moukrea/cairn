@@ -1,0 +1,181 @@
+# cairn conformance test orchestration
+# Tier 0: language containers only (default)
+# Tier 1: + signaling server + TURN relay
+# Tier 2: + server-mode peer
+#
+# Usage:
+#   docker compose build
+#   docker compose run tests                          # all tiers
+#   docker compose --profile tier0 up -d              # tier 0 only
+#   docker compose --profile tier1 up -d              # tier 0 + 1
+#   docker compose --profile tier2 up -d              # all tiers
+
+services:
+  # --- Language containers (Tier 0) ---
+  rust:
+    build:
+      context: ..
+      dockerfile: conformance/Dockerfile.rust
+    networks: [cairn-test]
+    cap_add: [NET_ADMIN]
+    profiles: [tier0, tier1, tier2]
+    stdin_open: true
+    environment:
+      - CAIRN_VECTORS_DIR=/conformance/vectors
+      - CAIRN_FIXTURES_DIR=/conformance/fixtures
+    volumes:
+      - ./fixtures:/conformance/fixtures:ro
+      - ./tests:/conformance/tests:ro
+      - ./vectors:/conformance/vectors:ro
+      - results:/results
+
+  ts:
+    build:
+      context: ..
+      dockerfile: conformance/Dockerfile.ts
+    networks: [cairn-test]
+    cap_add: [NET_ADMIN]
+    profiles: [tier0, tier1, tier2]
+    stdin_open: true
+    environment:
+      - CAIRN_VECTORS_DIR=/conformance/vectors
+      - CAIRN_FIXTURES_DIR=/conformance/fixtures
+    volumes:
+      - ./fixtures:/conformance/fixtures:ro
+      - ./tests:/conformance/tests:ro
+      - ./vectors:/conformance/vectors:ro
+      - results:/results
+
+  go:
+    build:
+      context: ..
+      dockerfile: conformance/Dockerfile.go
+    networks: [cairn-test]
+    cap_add: [NET_ADMIN]
+    profiles: [tier0, tier1, tier2]
+    stdin_open: true
+    environment:
+      - CAIRN_VECTORS_DIR=/conformance/vectors
+      - CAIRN_FIXTURES_DIR=/conformance/fixtures
+    volumes:
+      - ./fixtures:/conformance/fixtures:ro
+      - ./tests:/conformance/tests:ro
+      - ./vectors:/conformance/vectors:ro
+      - results:/results
+
+  py:
+    build:
+      context: ..
+      dockerfile: conformance/Dockerfile.py
+    networks: [cairn-test]
+    cap_add: [NET_ADMIN]
+    profiles: [tier0, tier1, tier2]
+    stdin_open: true
+    environment:
+      - CAIRN_VECTORS_DIR=/conformance/vectors
+      - CAIRN_FIXTURES_DIR=/conformance/fixtures
+    volumes:
+      - ./fixtures:/conformance/fixtures:ro
+      - ./tests:/conformance/tests:ro
+      - ./vectors:/conformance/vectors:ro
+      - results:/results
+
+  php:
+    build:
+      context: ..
+      dockerfile: conformance/Dockerfile.php
+    networks: [cairn-test]
+    cap_add: [NET_ADMIN]
+    profiles: [tier0, tier1, tier2]
+    stdin_open: true
+    environment:
+      - CAIRN_VECTORS_DIR=/conformance/vectors
+      - CAIRN_FIXTURES_DIR=/conformance/fixtures
+    volumes:
+      - ./fixtures:/conformance/fixtures:ro
+      - ./tests:/conformance/tests:ro
+      - ./vectors:/conformance/vectors:ro
+      - results:/results
+
+  # --- Companion infrastructure (Tier 1) ---
+  signaling:
+    build:
+      context: ..
+      dockerfile: conformance/Dockerfile.rust
+    command: ["cairn-signal", "--listen-addr", "0.0.0.0:8443"]
+    entrypoint: []
+    networks: [cairn-test]
+    profiles: [tier1, tier2]
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c 'echo > /dev/tcp/localhost/8443' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  relay:
+    build:
+      context: ..
+      dockerfile: conformance/Dockerfile.rust
+    command: ["cairn-relay", "--listen-addr", "0.0.0.0:3478", "--credentials", "test:test"]
+    entrypoint: []
+    networks: [cairn-test]
+    profiles: [tier1, tier2]
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c 'echo > /dev/udp/localhost/3478' 2>/dev/null || exit 0"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- Server-mode peer (Tier 2) ---
+  server-peer:
+    build:
+      context: ..
+      dockerfile: conformance/Dockerfile.rust
+    command: ["cairn-conformance-runner", "--server-mode"]
+    networks: [cairn-test]
+    cap_add: [NET_ADMIN]
+    profiles: [tier2]
+    environment:
+      - CAIRN_VECTORS_DIR=/conformance/vectors
+      - CAIRN_FIXTURES_DIR=/conformance/fixtures
+    volumes:
+      - ./fixtures:/conformance/fixtures:ro
+      - ./vectors:/conformance/vectors:ro
+      - results:/results
+
+  # --- Test runner (orchestrator) ---
+  tests:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM debian:bookworm-slim
+        RUN apt-get update && apt-get install -y --no-install-recommends \
+            ca-certificates curl gnupg && \
+            install -m 0755 -d /etc/apt/keyrings && \
+            curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list && \
+            apt-get update && apt-get install -y --no-install-recommends docker-ce-cli && \
+            rm -rf /var/lib/apt/lists/*
+    depends_on:
+      - rust
+      - ts
+      - go
+      - py
+      - php
+    networks: [cairn-test]
+    volumes:
+      - ./run-tests.sh:/usr/local/bin/run-tests:ro
+      - ./tests:/conformance/tests:ro
+      - ./fixtures:/conformance/fixtures:ro
+      - ./vectors:/conformance/vectors:ro
+      - results:/results
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    entrypoint: ["/bin/bash", "/usr/local/bin/run-tests"]
+    profiles: [tier0, tier1, tier2]
+
+networks:
+  cairn-test:
+    driver: bridge
+
+volumes:
+  results:

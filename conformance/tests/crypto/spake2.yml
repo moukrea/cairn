@@ -1,0 +1,53 @@
+# SPAKE2 interop tests
+# Given identical password and nonces from fixture, SPAKE2 yields identical shared secret
+
+scenarios:
+  - scenario: crypto-spake2-basic
+    description: SPAKE2 shared secret matches between implementations for identical password
+    tier: 0
+    category: crypto
+    participants:
+      - { role: impl_a, lang: any }
+      - { role: impl_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: impl_a
+        params:
+          operation: spake2
+          fixture: fixtures/keys/spake2-vectors.cbor
+          vector_index: 0
+      - type: verify_crypto
+        actor: impl_b
+        params:
+          operation: spake2
+          fixture: fixtures/keys/spake2-vectors.cbor
+          vector_index: 0
+    expected:
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: crypto-spake2-multiple-vectors
+    description: SPAKE2 matches across multiple test vectors with different passwords
+    tier: 0
+    category: crypto
+    participants:
+      - { role: impl_a, lang: any }
+      - { role: impl_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: impl_a
+        params:
+          operation: spake2_batch
+          fixture: fixtures/keys/spake2-vectors.cbor
+      - type: verify_crypto
+        actor: impl_b
+        params:
+          operation: spake2_batch
+          fixture: fixtures/keys/spake2-vectors.cbor
+    expected:
+      - { type: crypto_match, params: { description: "All SPAKE2 test vectors produce matching secrets" } }
+    timeout_ms: 2000
+    budget_ms: 2000

@@ -1,0 +1,197 @@
+{
+  "description": "CBOR envelope encoding test vectors for cairn wire protocol. All implementations must produce byte-identical output for deterministic CBOR encoding.",
+  "vectors": [
+    {
+      "description": "Minimal HEARTBEAT envelope: version + msg_type + msg_id + empty payload, no session_id or auth_tag",
+      "expected_output": {
+        "cbor_hex": "a400010119040002500193a54d0000700080000000000000010440",
+        "map_entry_count": 4
+      },
+      "id": "envelope-minimal-heartbeat",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0400",
+        "payload_hex": "",
+        "session_id_hex": null,
+        "version": 1
+      }
+    },
+    {
+      "description": "Full DATA_MESSAGE envelope with all 6 fields present including session_id and auth_tag",
+      "expected_output": {
+        "cbor_hex": "a600010119030002500193a54d000070008000000000000002035820abababababababababababababababababababababababababababababababab0444cafebabe0550deadbeefcafebabe0102030405060708",
+        "map_entry_count": 6
+      },
+      "id": "envelope-full-data-message",
+      "input": {
+        "auth_tag_hex": "deadbeefcafebabe0102030405060708",
+        "msg_id_hex": "0193a54d000070008000000000000002",
+        "msg_type": "0x0300",
+        "payload_hex": "cafebabe",
+        "session_id_hex": "abababababababababababababababababababababababababababababababab",
+        "version": 1
+      }
+    },
+    {
+      "description": "PAIR_REQUEST with auth_tag but no session_id",
+      "expected_output": {
+        "cbor_hex": "a500010119010002500193a54d0000700080000000000000030441010542ff00",
+        "map_entry_count": 5
+      },
+      "id": "envelope-no-session-with-auth",
+      "input": {
+        "auth_tag_hex": "ff00",
+        "msg_id_hex": "0193a54d000070008000000000000003",
+        "msg_type": "0x0100",
+        "payload_hex": "01",
+        "session_id_hex": null,
+        "version": 1
+      }
+    },
+    {
+      "description": "SESSION_RESUME with session_id but no auth_tag",
+      "expected_output": {
+        "cbor_hex": "a500010119020002500193a54d000070008000000000000001035820abababababababababababababababababababababababababababababababab0440",
+        "map_entry_count": 5
+      },
+      "id": "envelope-session-no-auth",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0200",
+        "payload_hex": "",
+        "session_id_hex": "abababababababababababababababababababababababababababababababab",
+        "version": 1
+      }
+    },
+    {
+      "description": "Edge case: version 0",
+      "expected_output": {
+        "cbor_hex": "a400000119040002500193a54d0000700080000000000000010440",
+        "map_entry_count": 4
+      },
+      "id": "envelope-version-zero",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0400",
+        "payload_hex": "",
+        "session_id_hex": null,
+        "version": 0
+      }
+    },
+    {
+      "description": "Edge case: version 255 (max uint8)",
+      "expected_output": {
+        "cbor_hex": "a40018ff0119040002500193a54d0000700080000000000000010440",
+        "map_entry_count": 4
+      },
+      "id": "envelope-version-max",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0400",
+        "payload_hex": "",
+        "session_id_hex": null,
+        "version": 255
+      }
+    },
+    {
+      "description": "VERSION_NEGOTIATE message type (0x0001)",
+      "expected_output": {
+        "cbor_hex": "a40001010102500193a54d0000700080000000000000010440",
+        "map_entry_count": 4
+      },
+      "id": "envelope-version-negotiate",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0001",
+        "payload_hex": "",
+        "session_id_hex": null,
+        "version": 1
+      }
+    },
+    {
+      "description": "DATA_MESSAGE with 256-byte payload",
+      "expected_output": {
+        "cbor_hex": "a400010119030002500193a54d00007000800000000000000104590100000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+        "map_entry_count": 4
+      },
+      "id": "envelope-large-payload",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0300",
+        "payload_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+        "session_id_hex": null,
+        "version": 1
+      }
+    },
+    {
+      "description": "HEARTBEAT with all-zero msg_id",
+      "expected_output": {
+        "cbor_hex": "a40001011904000250000000000000000000000000000000000440",
+        "map_entry_count": 4
+      },
+      "id": "envelope-zero-msg-id",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "00000000000000000000000000000000",
+        "msg_type": "0x0400",
+        "payload_hex": "",
+        "session_id_hex": null,
+        "version": 1
+      }
+    },
+    {
+      "description": "HEARTBEAT with all-0xFF msg_id",
+      "expected_output": {
+        "cbor_hex": "a40001011904000250ffffffffffffffffffffffffffffffff0440",
+        "map_entry_count": 4
+      },
+      "id": "envelope-max-msg-id",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "ffffffffffffffffffffffffffffffff",
+        "msg_type": "0x0400",
+        "payload_hex": "",
+        "session_id_hex": null,
+        "version": 1
+      }
+    },
+    {
+      "description": "DATA_MESSAGE with nested CBOR map as payload",
+      "expected_output": {
+        "cbor_hex": "a400010119030002500193a54d000070008000000000000001044da16568656c6c6f65776f726c64",
+        "map_entry_count": 4
+      },
+      "id": "envelope-nested-cbor-payload",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0300",
+        "payload_hex": "a16568656c6c6f65776f726c64",
+        "session_id_hex": null,
+        "version": 1
+      }
+    },
+    {
+      "description": "Application extension message type (0xF000)",
+      "expected_output": {
+        "cbor_hex": "a400010119f00002500193a54d000070008000000000000001044142",
+        "map_entry_count": 4
+      },
+      "id": "envelope-app-extension-type",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0xF000",
+        "payload_hex": "42",
+        "session_id_hex": null,
+        "version": 1
+      }
+    }
+  ]
+}

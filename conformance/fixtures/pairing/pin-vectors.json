@@ -1,0 +1,55 @@
+{
+  "description": "PIN code test vectors for cairn pairing conformance",
+  "vectors": [
+    {
+      "pin": "ABCD-EF01",
+      "normalized": "ABCD-EF01",
+      "comment": "Standard Crockford Base32 PIN, no normalization needed"
+    },
+    {
+      "pin": "abcd-ef01",
+      "normalized": "ABCD-EF01",
+      "comment": "Case-insensitive: lowercase normalized to uppercase"
+    },
+    {
+      "pin": "ABCD-EFOl",
+      "normalized": "ABCD-EF01",
+      "comment": "O->0 and l->1 normalization"
+    },
+    {
+      "pin": "aBcD-eFiL",
+      "normalized": "ABCD-EF11",
+      "comment": "Mixed case with i->1 and L->1 normalization"
+    },
+    {
+      "pin": "0000-0000",
+      "normalized": "0000-0000",
+      "comment": "All zeros — valid Crockford Base32"
+    },
+    {
+      "pin": "ZZZZ-ZZZZ",
+      "normalized": "ZZZZ-ZZZZ",
+      "comment": "Maximum Crockford Base32 value"
+    },
+    {
+      "pin": "0oO0-1iIl",
+      "normalized": "0000-1111",
+      "comment": "All ambiguous characters: o/O->0, i/I/l->1"
+    },
+    {
+      "pin": "HJKM-NPQR",
+      "normalized": "HJKM-NPQR",
+      "comment": "All non-ambiguous upper-alpha characters"
+    },
+    {
+      "pin": "STVW-XY23",
+      "normalized": "STVW-XY23",
+      "comment": "More non-ambiguous characters plus digits"
+    },
+    {
+      "pin": " ABCD-EF01 ",
+      "normalized": "ABCD-EF01",
+      "comment": "Leading/trailing whitespace should be trimmed before normalization"
+    }
+  ]
+}

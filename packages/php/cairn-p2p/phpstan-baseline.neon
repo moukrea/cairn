@@ -1,0 +1,96 @@
+parameters:
+	ignoreErrors:
+		-
+			message: "#^Property Cairn\\\\Crypto\\\\Identity\\:\\:\\$secretKey \\(string\\) does not accept null\\.$#"
+			count: 1
+			path: src/Crypto/Identity.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between non\\-falsy\\-string and false will always evaluate to false\\.$#"
+			count: 1
+			path: src/Crypto/Kdf.php
+
+		-
+			message: "#^Comparison operation \"\\<\\=\" between 32 and 32 is always true\\.$#"
+			count: 1
+			path: src/Crypto/Noise.php
+
+		-
+			message: "#^Else branch is unreachable because previous condition is always true\\.$#"
+			count: 1
+			path: src/Crypto/Noise.php
+
+		-
+			message: "#^Property Cairn\\\\Crypto\\\\NoiseXXHandshake\\:\\:\\$localEphemeralPub is never read, only written\\.$#"
+			count: 1
+			path: src/Crypto/Noise.php
+
+		-
+			message: "#^Property Cairn\\\\Crypto\\\\NoiseXXHandshake\\:\\:\\$remoteStatic is never read, only written\\.$#"
+			count: 1
+			path: src/Crypto/Noise.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between GMP and false will always evaluate to false\\.$#"
+			count: 1
+			path: src/Crypto/PeerId.php
+
+		-
+			message: "#^Property Cairn\\\\Crypto\\\\DoubleRatchet\\:\\:\\$dhSelfSecret \\(string\\) does not accept null\\.$#"
+			count: 1
+			path: src/Crypto/Ratchet.php
+
+		-
+			message: "#^Property Cairn\\\\Crypto\\\\DoubleRatchet\\:\\:\\$rootKey \\(string\\) does not accept null\\.$#"
+			count: 1
+			path: src/Crypto/Ratchet.php
+
+		-
+			message: "#^Property Cairn\\\\Crypto\\\\Spake2\\:\\:\\$password \\(string\\) does not accept null\\.$#"
+			count: 1
+			path: src/Crypto/Spake2.php
+
+		-
+			message: "#^Property Cairn\\\\Crypto\\\\Spake2\\:\\:\\$scalar \\(string\\) does not accept null\\.$#"
+			count: 1
+			path: src/Crypto/Spake2.php
+
+		-
+			message: "#^Property Cairn\\\\Crypto\\\\X25519Keypair\\:\\:\\$secretKey \\(string\\) does not accept null\\.$#"
+			count: 1
+			path: src/Crypto/X25519Keypair.php
+
+		-
+			message: "#^Property Cairn\\\\Node\\:\\:\\$customRegistry is never read, only written\\.$#"
+			count: 1
+			path: src/Node.php
+
+		-
+			message: "#^Strict comparison using \\=\\=\\= between GMP and false will always evaluate to false\\.$#"
+			count: 1
+			path: src/Pairing/PairingLink.php
+
+		-
+			message: "#^Match arm is unreachable because previous comparison is always true\\.$#"
+			count: 1
+			path: src/Session.php
+
+		-
+			message: "#^Expression in empty\\(\\) is always falsy\\.$#"
+			count: 1
+			path: src/Transport/Chain.php
+
+		-
+			message: "#^Method Cairn\\\\Transport\\\\TcpConnection\\:\\:close\\(\\) should return React\\\\Promise\\\\PromiseInterface\\<void\\> but returns React\\\\Promise\\\\PromiseInterface\\<null\\>\\.$#"
+			count: 1
+			path: src/Transport/Tcp.php
+
+		-
+			message: "#^Method Cairn\\\\Transport\\\\TcpConnection\\:\\:send\\(\\) should return React\\\\Promise\\\\PromiseInterface\\<void\\> but returns React\\\\Promise\\\\PromiseInterface\\<null\\>\\.$#"
+			count: 1
+			path: src/Transport/Tcp.php
+
+		-
+			message: "#^Method Cairn\\\\Transport\\\\TcpTransport\\:\\:close\\(\\) should return React\\\\Promise\\\\PromiseInterface\\<void\\> but returns React\\\\Promise\\\\PromiseInterface\\<null\\>\\.$#"
+			count: 1
+			path: src/Transport/Tcp.php

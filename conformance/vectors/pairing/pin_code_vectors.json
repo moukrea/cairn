@@ -1,0 +1,139 @@
+{
+  "description": "PIN code test vectors for cairn pairing. Covers deterministic generation from known entropy, Crockford Base32 encoding, normalization, and validation.",
+  "vectors": [
+    {
+      "description": "PIN generated from all-zero entropy (5 bytes)",
+      "expected_output": {
+        "pin_formatted": "0000-0000",
+        "pin_raw": "00000000"
+      },
+      "id": "pin-from-zero-entropy",
+      "input": {
+        "entropy_bits": 40,
+        "entropy_hex": "0000000000"
+      }
+    },
+    {
+      "description": "PIN generated from max entropy (5 bytes of 0xFF)",
+      "expected_output": {
+        "pin_formatted": "ZZZZ-ZZZZ",
+        "pin_raw": "ZZZZZZZZ"
+      },
+      "id": "pin-from-max-entropy",
+      "input": {
+        "entropy_bits": 40,
+        "entropy_hex": "ffffffffff"
+      }
+    },
+    {
+      "description": "PIN from entropy: sequential-bytes",
+      "expected_output": {
+        "pin_formatted": "04HM-ASW9",
+        "pin_raw": "04HMASW9"
+      },
+      "id": "pin-from-sequential-bytes",
+      "input": {
+        "entropy_bits": 40,
+        "entropy_hex": "0123456789"
+      }
+    },
+    {
+      "description": "PIN from entropy: mixed-bytes",
+      "expected_output": {
+        "pin_formatted": "NF6Y-Y093",
+        "pin_raw": "NF6YY093"
+      },
+      "id": "pin-from-mixed-bytes",
+      "input": {
+        "entropy_bits": 40,
+        "entropy_hex": "abcdef0123"
+      }
+    },
+    {
+      "description": "PIN from entropy: high-bit-set",
+      "expected_output": {
+        "pin_formatted": "G000-0000",
+        "pin_raw": "G0000000"
+      },
+      "id": "pin-from-high-bit-set",
+      "input": {
+        "entropy_bits": 40,
+        "entropy_hex": "8000000000"
+      }
+    },
+    {
+      "description": "PIN from entropy: alternating-bits",
+      "expected_output": {
+        "pin_formatted": "APN5-BAJN",
+        "pin_raw": "APN5BAJN"
+      },
+      "id": "pin-from-alternating-bits",
+      "input": {
+        "entropy_bits": 40,
+        "entropy_hex": "55aa55aa55"
+      }
+    },
+    {
+      "description": "PIN normalization: lowercase to uppercase",
+      "expected_output": {
+        "normalized": "ABCD-EF01"
+      },
+      "id": "pin-normalize-lowercase-to-uppercase",
+      "input": {
+        "pin_raw": "abcd-ef01"
+      }
+    },
+    {
+      "description": "PIN normalization: O->0, l->1",
+      "expected_output": {
+        "normalized": "ABCD-EF01"
+      },
+      "id": "pin-normalize-Oto0-lto1",
+      "input": {
+        "pin_raw": "ABCD-EFOl"
+      }
+    },
+    {
+      "description": "PIN normalization: mixed case with i->1, L->1",
+      "expected_output": {
+        "normalized": "ABCD-EF11"
+      },
+      "id": "pin-normalize-mixed-case-with-ito1-Lto1",
+      "input": {
+        "pin_raw": "aBcD-eFiL"
+      }
+    },
+    {
+      "description": "PIN normalization: all ambiguous character normalization",
+      "expected_output": {
+        "normalized": "0000-1111"
+      },
+      "id": "pin-normalize-all-ambiguous-character-normalization",
+      "input": {
+        "pin_raw": "0oO0-1iIl"
+      }
+    },
+    {
+      "description": "Invalid PIN: too short (7 chars instead of 8)",
+      "expected_output": {
+        "error": "wrong_length",
+        "valid": false
+      },
+      "id": "pin-invalid-too-short",
+      "input": {
+        "pin_raw": "ABCD-EF0"
+      }
+    },
+    {
+      "description": "Invalid PIN: 'U' is not in Crockford Base32 alphabet",
+      "expected_output": {
+        "error": "invalid_character",
+        "valid": false
+      },
+      "id": "pin-invalid-bad-chars",
+      "input": {
+        "pin_raw": "ABCD-EFU0"
+      }
+    }
+  ]
+}

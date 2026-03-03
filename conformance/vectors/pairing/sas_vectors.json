@@ -1,0 +1,132 @@
+{
+  "description": "SAS (Short Authentication String) derivation test vectors. Covers numeric (6-digit) and emoji (4-emoji) variants.",
+  "vectors": [
+    {
+      "description": "Numeric SAS derivation from shared secret (all-0xAA)",
+      "expected_output": {
+        "numeric_code": "796041",
+        "sas_bytes_hex": "f9d9bb49",
+        "sas_u32": 4191796041
+      },
+      "id": "sas-numeric-all-0xAA",
+      "input": {
+        "info": "cairn-sas-numeric-v1",
+        "salt": null,
+        "shared_secret_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "description": "Emoji SAS derivation from shared secret (all-0xAA)",
+      "expected_output": {
+        "emoji_indices": [
+          26,
+          55,
+          43,
+          25
+        ],
+        "emojis": [
+          "bell",
+          "hammer",
+          "drum",
+          "gem"
+        ],
+        "sas_bytes_hex": "a71a897793ebaf19"
+      },
+      "id": "sas-emoji-all-0xAA",
+      "input": {
+        "info": "cairn-sas-emoji-v1",
+        "salt": null,
+        "shared_secret_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "description": "Numeric SAS derivation from shared secret (all-zeros)",
+      "expected_output": {
+        "numeric_code": "632979",
+        "sas_bytes_hex": "6b34f613",
+        "sas_u32": 1798632979
+      },
+      "id": "sas-numeric-all-zeros",
+      "input": {
+        "info": "cairn-sas-numeric-v1",
+        "salt": null,
+        "shared_secret_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "Emoji SAS derivation from shared secret (all-zeros)",
+      "expected_output": {
+        "emoji_indices": [
+          50,
+          56,
+          42,
+          16
+        ],
+        "emojis": [
+          "crown",
+          "anchor",
+          "bike",
+          "tree"
+        ],
+        "sas_bytes_hex": "217237783dea2810"
+      },
+      "id": "sas-emoji-all-zeros",
+      "input": {
+        "info": "cairn-sas-emoji-v1",
+        "salt": null,
+        "shared_secret_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "Numeric SAS derivation from shared secret (sequential)",
+      "expected_output": {
+        "numeric_code": "343137",
+        "sas_bytes_hex": "2536b861",
+        "sas_u32": 624343137
+      },
+      "id": "sas-numeric-sequential",
+      "input": {
+        "info": "cairn-sas-numeric-v1",
+        "salt": null,
+        "shared_secret_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      }
+    },
+    {
+      "description": "Emoji SAS derivation from shared secret (sequential)",
+      "expected_output": {
+        "emoji_indices": [
+          56,
+          49,
+          42,
+          59
+        ],
+        "emojis": [
+          "anchor",
+          "tent",
+          "bike",
+          "heart"
+        ],
+        "sas_bytes_hex": "8d385e310aaa603b"
+      },
+      "id": "sas-emoji-sequential",
+      "input": {
+        "info": "cairn-sas-emoji-v1",
+        "salt": null,
+        "shared_secret_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      }
+    },
+    {
+      "description": "Both peers derive identical SAS code from the same shared secret",
+      "expected_output": {
+        "both_parties_match": true,
+        "numeric_code": "024051"
+      },
+      "id": "sas-both-parties-identical",
+      "input": {
+        "info": "cairn-sas-numeric-v1",
+        "note": "Both initiator and responder compute SAS from the same shared secret and info string",
+        "shared_secret_hex": "4242424242424242424242424242424242424242424242424242424242424242"
+      }
+    }
+  ]
+}

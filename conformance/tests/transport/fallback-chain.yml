@@ -1,0 +1,114 @@
+# Transport fallback chain tests — force specific transport selections via network conditions
+# Priority chain: 1=QUIC, 2=STUN UDP, 3=TCP, 4=TURN UDP, 5=TURN TCP, 6=WS/TLS(443)
+
+scenarios:
+  - scenario: transport-direct-quic
+    description: "Open NAT, UDP allowed — expect QUIC v1 (priority 1)"
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-quic-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-quic-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+    expected:
+      - { type: transport_selected, actor: peer_a, params: { transport: quic_v1, priority: 1 } }
+    timeout_ms: 30000
+    budget_ms: 10000
+
+  - scenario: transport-stun-hole-punch
+    description: "Cone NAT — expect STUN-assisted UDP hole punch (priority 2)"
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: restricted_cone }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-stun-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-stun-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+    expected:
+      - { type: transport_selected, actor: peer_a, params: { transport: stun_udp, priority: 2 } }
+    timeout_ms: 30000
+    budget_ms: 10000
+
+  - scenario: transport-tcp-fallback
+    description: "UDP blocked — expect direct TCP fallback (priority 3)"
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network:
+      nat_profile: open
+      firewall:
+        block_udp: true
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-tcp-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-tcp-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+    expected:
+      - { type: transport_selected, actor: peer_a, params: { transport: direct_tcp, priority: 3 } }
+    timeout_ms: 30000
+    budget_ms: 10000
+
+  - scenario: transport-turn-udp
+    description: "Hole punch fails, TURN available — expect TURN UDP relay (priority 4)"
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: symmetric }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-turn-udp-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-turn-udp-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+    expected:
+      - { type: transport_selected, actor: peer_a, params: { transport: turn_udp, priority: 4 } }
+    timeout_ms: 30000
+    budget_ms: 10000
+
+  - scenario: transport-turn-tcp
+    description: "UDP fully blocked, TURN available — expect TURN TCP relay (priority 5)"
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network:
+      nat_profile: symmetric
+      firewall:
+        block_udp: true
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-turn-tcp-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-turn-tcp-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+    expected:
+      - { type: transport_selected, actor: peer_a, params: { transport: turn_tcp, priority: 5 } }
+    timeout_ms: 30000
+    budget_ms: 10000
+
+  - scenario: transport-ws-443
+    description: "Only port 443 open — expect WebSocket over TLS (priority 6)"
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network:
+      nat_profile: symmetric
+      firewall:
+        allow_only_port: 443
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-ws-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-ws-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+    expected:
+      - { type: transport_selected, actor: peer_a, params: { transport: websocket_tls, priority: 6 } }
+    timeout_ms: 30000
+    budget_ms: 10000

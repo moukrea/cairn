@@ -1,0 +1,45 @@
+{
+  "description": "Pairing link URI test vectors for cairn pairing conformance",
+  "vectors": [
+    {
+      "uri": "cairn://pair?pid=12D3KooWA1bA&nonce=aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233&pake=eeff00112233&hints=mdns,dht",
+      "parsed": {
+        "peer_id": "12D3KooWA1bA",
+        "nonce_hex": "aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233",
+        "pake_commitment_hex": "eeff00112233",
+        "hints": ["mdns", "dht"]
+      },
+      "comment": "Standard pairing link with all parameters"
+    },
+    {
+      "uri": "cairn://pair?pid=12D3KooWA1bA&nonce=0000000000000000000000000000000000000000000000000000000000000000&pake=aabb&hints=signaling",
+      "parsed": {
+        "peer_id": "12D3KooWA1bA",
+        "nonce_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+        "pake_commitment_hex": "aabb",
+        "hints": ["signaling"]
+      },
+      "comment": "Single discovery hint"
+    },
+    {
+      "uri": "cairn://pair?pid=12D3KooWA1bA&nonce=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff&pake=00&hints=",
+      "parsed": {
+        "peer_id": "12D3KooWA1bA",
+        "nonce_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "pake_commitment_hex": "00",
+        "hints": []
+      },
+      "comment": "Max nonce value, minimal pake commitment, empty hints"
+    },
+    {
+      "uri": "cairn://pair?pid=12D3KooWA1bA&nonce=aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233&pake=eeff00112233&hints=mdns,dht,signaling,bluetooth",
+      "parsed": {
+        "peer_id": "12D3KooWA1bA",
+        "nonce_hex": "aabbccdd00112233aabbccdd00112233aabbccdd00112233aabbccdd00112233",
+        "pake_commitment_hex": "eeff00112233",
+        "hints": ["mdns", "dht", "signaling", "bluetooth"]
+      },
+      "comment": "Multiple discovery hints including bluetooth"
+    }
+  ]
+}

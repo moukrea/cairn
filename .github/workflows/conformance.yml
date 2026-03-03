@@ -1,0 +1,44 @@
+name: Conformance Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: 'Test tier to run (0=crypto-only, 1=with-servers, 2=full-system)'
+        required: false
+        default: '0'
+        type: choice
+        options:
+          - '0'
+          - '1'
+          - '2'
+  schedule:
+    # Weekly on Sundays at 03:00 UTC
+    - cron: '0 3 * * 0'
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build conformance images
+        working-directory: conformance
+        run: docker compose build
+
+      - name: Run conformance tests
+        working-directory: conformance
+        run: |
+          TIER="${{ inputs.tier || '0' }}"
+          docker compose run --rm tests --tier "$TIER"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-results
+          path: conformance/results/
+          retention-days: 30

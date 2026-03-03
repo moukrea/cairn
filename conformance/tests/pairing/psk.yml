@@ -1,0 +1,286 @@
+# PSK pairing interop tests — all 10 language pairs
+# Mechanism: Pre-shared key (128-bit minimum entropy)
+# Flow: Initiation
+# Validates: PSK accepted, SPAKE2 completion with PSK-derived credentials
+
+scenarios:
+  - scenario: pair-psk-rust-ts
+    description: Psk pairing between RUST and TypeScript
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+      - type: pair
+        actor: responder
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches with PSK input" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-psk-rust-go
+    description: Psk pairing between RUST and GO
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+      - type: pair
+        actor: responder
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches with PSK input" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-psk-rust-py
+    description: Psk pairing between RUST and PY
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+      - type: pair
+        actor: responder
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches with PSK input" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-psk-rust-php
+    description: Psk pairing between RUST and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+      - type: pair
+        actor: responder
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches with PSK input" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-psk-ts-go
+    description: Psk pairing between TypeScript and GO
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+      - type: pair
+        actor: responder
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches with PSK input" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-psk-ts-py
+    description: Psk pairing between TypeScript and PY
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+      - type: pair
+        actor: responder
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches with PSK input" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-psk-ts-php
+    description: Psk pairing between TypeScript and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+      - type: pair
+        actor: responder
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches with PSK input" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-psk-go-py
+    description: Psk pairing between GO and PY
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+      - type: pair
+        actor: responder
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches with PSK input" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-psk-go-php
+    description: Psk pairing between GO and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+      - type: pair
+        actor: responder
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches with PSK input" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-psk-py-php
+    description: Psk pairing between PY and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: py }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+      - type: pair
+        actor: responder
+        params:
+          mechanism: psk
+          flow: initiation
+          psk: "test-conformance-psk-128bit-minimum-entropy"
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches with PSK input" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+

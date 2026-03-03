@@ -1,0 +1,16 @@
+{
+  "name": "moukrea/cairn-chat-php",
+  "description": "P2P messaging demo for cairn (PHP)",
+  "type": "project",
+  "require": {
+    "php": ">=8.2",
+    "moukrea/cairn-p2p": "*"
+  },
+  "repositories": [
+    {
+      "type": "path",
+      "url": "../../../php/cairn-p2p"
+    }
+  ],
+  "bin": ["cairn_chat.php"]
+}

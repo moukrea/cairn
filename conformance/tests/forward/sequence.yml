@@ -1,0 +1,61 @@
+# Store-and-forward sequence ordering and ratchet reconstruction tests
+
+scenarios:
+  - scenario: forward-sequence-order
+    description: Multiple forwarded messages delivered in UUID v7 sequence order
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: any }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-seq-s-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-seq-s-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-seq-r-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-seq-r-psk" } }
+      - { type: disconnect, actor: recipient, params: {} }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "6d736731" } }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "6d736732" } }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "6d736733" } }
+      - { type: reconnect, actor: recipient, params: {} }
+    expected:
+      - type: message_received
+        actor: recipient
+        params:
+          messages_in_order:
+            - "6d736731"
+            - "6d736732"
+            - "6d736733"
+          ordering: uuid_v7_sequence
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: forward-ratchet-reconstruct
+    description: Recipient reconstructs Double Ratchet state from stored messages with ratchet headers
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: any }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-ratchet-s-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-ratchet-s-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-ratchet-r-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-ratchet-r-psk" } }
+      - { type: establish_session, actor: sender, params: {} }
+      - { type: send_data, actor: sender, params: { channel: chat, payload_hex: "6469726563742031" } }
+      - { type: disconnect, actor: recipient, params: {} }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "666f72776172646564", include_ratchet_header: true } }
+      - { type: reconnect, actor: recipient, params: {} }
+    expected:
+      - type: status
+        actor: recipient
+        params:
+          ratchet_reconstructed: true
+          message_decrypted: true
+    timeout_ms: 30000
+    budget_ms: 30000

@@ -1,0 +1,107 @@
+{
+  "description": "AEAD test vectors for AES-256-GCM and ChaCha20-Poly1305 used in cairn session encryption.",
+  "vectors": [
+    {
+      "description": "AES-256-GCM encryption with AAD",
+      "expected_output": {
+        "ciphertext_and_tag_hex": "76b7d68e2ad4447b7d5a715d8dd25bd773f06e7425f715c06863202c588390dfee1e5a0d5d6c8a45",
+        "ciphertext_len": 24,
+        "tag_len": 16
+      },
+      "id": "aes256gcm-encrypt-with-aad",
+      "input": {
+        "aad_hex": "636169726e2d6161642d7631",
+        "algorithm": "AES-256-GCM",
+        "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "nonce_hex": "000000000000000000000001",
+        "plaintext_hex": "636169726e2074657374206461746120666f722041454144"
+      }
+    },
+    {
+      "description": "AES-256-GCM encryption without AAD",
+      "expected_output": {
+        "ciphertext_and_tag_hex": "76b7d68e2ad4447b7d5a715d8dd25bd773f06e7425f715c0e8c6c299a6d514382730d02970df19d1"
+      },
+      "id": "aes256gcm-encrypt-no-aad",
+      "input": {
+        "aad_hex": "",
+        "algorithm": "AES-256-GCM",
+        "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "nonce_hex": "000000000000000000000001",
+        "plaintext_hex": "636169726e2074657374206461746120666f722041454144"
+      }
+    },
+    {
+      "description": "AES-256-GCM encryption of empty plaintext (tag only)",
+      "expected_output": {
+        "ciphertext_and_tag_hex": "749b07950441caf5b217629876e0699c"
+      },
+      "id": "aes256gcm-empty-plaintext",
+      "input": {
+        "aad_hex": "636169726e2d6161642d7631",
+        "algorithm": "AES-256-GCM",
+        "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "nonce_hex": "000000000000000000000001",
+        "plaintext_hex": ""
+      }
+    },
+    {
+      "description": "ChaCha20-Poly1305 encryption with AAD",
+      "expected_output": {
+        "ciphertext_and_tag_hex": "0a3d15ab5f2acc1f5e055e4bd2607632769e4d608ff4bd31e04e3a103c44a4f60739dbd74f8911e0",
+        "ciphertext_len": 24,
+        "tag_len": 16
+      },
+      "id": "chacha20poly1305-encrypt-with-aad",
+      "input": {
+        "aad_hex": "636169726e2d6161642d7631",
+        "algorithm": "ChaCha20-Poly1305",
+        "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "nonce_hex": "000000000000000000000001",
+        "plaintext_hex": "636169726e2074657374206461746120666f722041454144"
+      }
+    },
+    {
+      "description": "ChaCha20-Poly1305 encryption without AAD",
+      "expected_output": {
+        "ciphertext_and_tag_hex": "0a3d15ab5f2acc1f5e055e4bd2607632769e4d608ff4bd319c9af5bbbc56078cfc9c66f65fee60c6"
+      },
+      "id": "chacha20poly1305-encrypt-no-aad",
+      "input": {
+        "aad_hex": "",
+        "algorithm": "ChaCha20-Poly1305",
+        "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "nonce_hex": "000000000000000000000001",
+        "plaintext_hex": "636169726e2074657374206461746120666f722041454144"
+      }
+    },
+    {
+      "description": "ChaCha20-Poly1305 encryption of empty plaintext (tag only)",
+      "expected_output": {
+        "ciphertext_and_tag_hex": "d872e5646480d56359133f2f0a2b0484"
+      },
+      "id": "chacha20poly1305-empty-plaintext",
+      "input": {
+        "aad_hex": "636169726e2d6161642d7631",
+        "algorithm": "ChaCha20-Poly1305",
+        "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "nonce_hex": "000000000000000000000001",
+        "plaintext_hex": ""
+      }
+    },
+    {
+      "description": "AES-256-GCM with different nonce produces different ciphertext",
+      "expected_output": {
+        "ciphertext_and_tag_hex": "aa10470fda6baeb4ca791c7516358aace07847f0afec4eeb8f340cf59c8878438728050f6eca6b78"
+      },
+      "id": "aes256gcm-different-nonce",
+      "input": {
+        "aad_hex": "636169726e2d6161642d7631",
+        "algorithm": "AES-256-GCM",
+        "key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "nonce_hex": "000000000000000000000002",
+        "plaintext_hex": "636169726e2074657374206461746120666f722041454144"
+      }
+    }
+  ]
+}

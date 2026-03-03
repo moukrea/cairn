@@ -1,0 +1,200 @@
+{
+  "description": "HKDF-SHA256 test vectors for all cairn domain separation constants plus RFC 5869 reference vectors.",
+  "vectors": [
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-session-key-v1' — Session key derivation",
+      "expected_output": {
+        "okm_hex": "7b02e4cbbde65e97296ad0c8802a1487ff97e2b395cbab653d0976e72b732ce5"
+      },
+      "id": "hkdf-session-key",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-session-key-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-rendezvous-id-v1' — Rendezvous ID derivation",
+      "expected_output": {
+        "okm_hex": "daf9d6e4ee7959ee7a57640e0b83172fb44c9d38f407d5d724770b60a7b52c08"
+      },
+      "id": "hkdf-rendezvous-id",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-rendezvous-id-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-sas-derivation-v1' — SAS code derivation (generic)",
+      "expected_output": {
+        "okm_hex": "4b6fb7f3bfe58967dd596dc4df126a922464bb8f66a538e24922b0ec954edf84"
+      },
+      "id": "hkdf-sas-derivation",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-sas-derivation-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-chain-key-v1' — Double Ratchet chain key",
+      "expected_output": {
+        "okm_hex": "e3d3982c71913fa90bde2727aa0473b46cfcfb45351009b53494274e85baf328"
+      },
+      "id": "hkdf-chain-key",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-chain-key-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-message-key-v1' — Double Ratchet message key",
+      "expected_output": {
+        "okm_hex": "dc4c29b0f3739d8e491268ad9be1079e06bcca6605f86a94889da9a70b723df5"
+      },
+      "id": "hkdf-message-key",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-message-key-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-sas-numeric-v1' — SAS numeric code derivation",
+      "expected_output": {
+        "okm_hex": "6c113ea91e26f6757ca9c3946079f92ca001f4440d1a75ce490425648cb87474"
+      },
+      "id": "hkdf-sas-numeric",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-sas-numeric-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-sas-emoji-v1' — SAS emoji derivation",
+      "expected_output": {
+        "okm_hex": "92a6ed459ed032548cc14f489415f363540efa0a6033bcb0400646835b836df2"
+      },
+      "id": "hkdf-sas-emoji",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-sas-emoji-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-pairing-session-key-v1' — Pairing session key from SPAKE2",
+      "expected_output": {
+        "okm_hex": "ec2ba7e2a3cace631e8dcb64b6208ccb56280bffa99f028f815dc373f2f418d1"
+      },
+      "id": "hkdf-pairing-session-key",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-pairing-session-key-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-pairing-key-confirm-v1' — Pairing key confirmation HMAC",
+      "expected_output": {
+        "okm_hex": "6e1ba87aee9d2e3de00fa13e72285a884984e254e995d5ae48f1f1c3a6a84083"
+      },
+      "id": "hkdf-pairing-key-confirm",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-pairing-key-confirm-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-root-chain-v1' — Double Ratchet root chain",
+      "expected_output": {
+        "okm_hex": "11e777b0001661f9ea65bdea8a03101c7a10de3fa0ae1183412f3d5e280c3376"
+      },
+      "id": "hkdf-root-chain",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-root-chain-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-chain-advance-v1' — Double Ratchet chain advance",
+      "expected_output": {
+        "okm_hex": "656683eaf5b20b5e110864c8025852b495512237fdd619666e6e0cb8c20b8934"
+      },
+      "id": "hkdf-chain-advance",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-chain-advance-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "HKDF-SHA256 with cairn info 'cairn-msg-encrypt-v1' — Double Ratchet message encryption",
+      "expected_output": {
+        "okm_hex": "36cbf2a4cfadd7756b2593ed94a1ea427c284d361cdf3e6d1fd9829984603129"
+      },
+      "id": "hkdf-msg-encrypt",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info": "cairn-msg-encrypt-v1",
+        "output_length": 32,
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "description": "RFC 5869 Test Case 1 (SHA-256)",
+      "expected_output": {
+        "okm_hex": "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+      },
+      "id": "hkdf-rfc5869-case1",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info_hex": "f0f1f2f3f4f5f6f7f8f9",
+        "output_length": 42,
+        "salt_hex": "000102030405060708090a0b0c"
+      }
+    },
+    {
+      "description": "RFC 5869 Test Case 2 (SHA-256)",
+      "expected_output": {
+        "okm_hex": "b11e398dc80327a1c8e7f78c596a49344f012eda2d4efad8a050cc4c19afa97c59045a99cac7827271cb41c65e590e09da3275600c2f09b8367793a9aca3db71cc30c58179ec3e87c14c01d5c1f3434f1d87"
+      },
+      "id": "hkdf-rfc5869-case2",
+      "input": {
+        "ikm_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f",
+        "info_hex": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+        "output_length": 82,
+        "salt_hex": "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeaf"
+      }
+    },
+    {
+      "description": "RFC 5869 Test Case 3 (SHA-256, zero-length salt and info)",
+      "expected_output": {
+        "okm_hex": "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8"
+      },
+      "id": "hkdf-rfc5869-case3",
+      "input": {
+        "ikm_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+        "info_hex": "",
+        "output_length": 42,
+        "salt_hex": ""
+      }
+    }
+  ]
+}

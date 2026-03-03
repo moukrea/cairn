@@ -1,0 +1,33 @@
+# Mesh 3-hop routing test — A->B->C->D, max_hops=3 respected
+
+scenarios:
+  - scenario: mesh-3hop-chain
+    description: "A->B->C->D route discovered, max_hops=3 respected"
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: relay_b, lang: any }
+      - { role: relay_c, lang: any }
+      - { role: peer_d, lang: any }
+    network:
+      topology:
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_relay_c: { reachable: true }
+        relay_c_to_peer_d: { reachable: true }
+        peer_a_to_relay_c: { reachable: false }
+        peer_a_to_peer_d: { reachable: false }
+        relay_b_to_peer_d: { reachable: false }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-3hop-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-3hop-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-3hop-bc-psk" } }
+      - { type: pair, actor: relay_c, params: { mechanism: psk, flow: initiation, psk: "test-3hop-bc-psk" } }
+      - { type: pair, actor: relay_c, params: { mechanism: psk, flow: initiation, psk: "test-3hop-cd-psk" } }
+      - { type: pair, actor: peer_d, params: { mechanism: psk, flow: initiation, psk: "test-3hop-cd-psk" } }
+      - { type: send_data, actor: peer_a, params: { destination: peer_d, channel: mesh-3hop, payload_hex: "3320686f7073" } }
+    expected:
+      - { type: message_received, actor: peer_d, params: { channel: mesh-3hop, payload_hex: "3320686f7073" } }
+      - { type: route_found, params: { hops: 3, max_hops_respected: true } }
+    timeout_ms: 30000
+    budget_ms: 20000

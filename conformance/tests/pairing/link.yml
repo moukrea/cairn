@@ -1,0 +1,185 @@
+# Pairing link interop tests — all 10 language pairs
+# Mechanism: Pairing link (cairn://pair?pid=...&nonce=...&pake=...&hints=...)
+# Flow: Initiation
+# Validates: URI parsing with all required parameters, SPAKE2 completion
+
+scenarios:
+  - scenario: pair-link-rust-ts
+    description: Pairing link exchange between Rust and TypeScript
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: link, flow: initiation } }
+      - { type: pair, actor: responder, params: { mechanism: link, flow: initiation, link_source: initiator } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-link-rust-go
+    description: Pairing link exchange between Rust and Go
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: link, flow: initiation } }
+      - { type: pair, actor: responder, params: { mechanism: link, flow: initiation, link_source: initiator } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-link-rust-py
+    description: Pairing link exchange between Rust and Python
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: link, flow: initiation } }
+      - { type: pair, actor: responder, params: { mechanism: link, flow: initiation, link_source: initiator } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-link-rust-php
+    description: Pairing link exchange between Rust and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: link, flow: initiation } }
+      - { type: pair, actor: responder, params: { mechanism: link, flow: initiation, link_source: initiator } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-link-ts-go
+    description: Pairing link exchange between TypeScript and Go
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: link, flow: initiation } }
+      - { type: pair, actor: responder, params: { mechanism: link, flow: initiation, link_source: initiator } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-link-ts-py
+    description: Pairing link exchange between TypeScript and Python
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: link, flow: initiation } }
+      - { type: pair, actor: responder, params: { mechanism: link, flow: initiation, link_source: initiator } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-link-ts-php
+    description: Pairing link exchange between TypeScript and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: link, flow: initiation } }
+      - { type: pair, actor: responder, params: { mechanism: link, flow: initiation, link_source: initiator } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-link-go-py
+    description: Pairing link exchange between Go and Python
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: link, flow: initiation } }
+      - { type: pair, actor: responder, params: { mechanism: link, flow: initiation, link_source: initiator } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-link-go-php
+    description: Pairing link exchange between Go and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: link, flow: initiation } }
+      - { type: pair, actor: responder, params: { mechanism: link, flow: initiation, link_source: initiator } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-link-py-php
+    description: Pairing link exchange between Python and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: py }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: link, flow: initiation } }
+      - { type: pair, actor: responder, params: { mechanism: link, flow: initiation, link_source: initiator } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000

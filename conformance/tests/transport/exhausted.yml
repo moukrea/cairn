@@ -1,0 +1,27 @@
+# Transport exhaustion test — all transports blocked, no relay available
+
+scenarios:
+  - scenario: transport-exhausted
+    description: "All transports blocked without relay — TransportExhausted error with diagnostics"
+    tier: 0
+    category: transport
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network:
+      nat_profile: symmetric
+      firewall:
+        block_all: true
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-exhausted-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-exhausted-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+    expected:
+      - type: error
+        actor: peer_a
+        params:
+          error_type: TransportExhausted
+          has_diagnostics: true
+          diagnostics_include: [nat_type, transports_attempted, failure_reasons]
+    timeout_ms: 30000
+    budget_ms: 30000

@@ -1,0 +1,53 @@
+{
+  "description": "X25519 key exchange test vectors for cairn. Uses x25519-dalek as reference implementation.",
+  "vectors": [
+    {
+      "description": "X25519 public key derived from static secret A (RFC 7748 test value)",
+      "expected_output": {
+        "public_key_hex": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"
+      },
+      "id": "x25519-pubkey-a",
+      "input": {
+        "static_secret_hex": "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a"
+      }
+    },
+    {
+      "description": "X25519 public key derived from static secret B",
+      "expected_output": {
+        "public_key_hex": "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f"
+      },
+      "id": "x25519-pubkey-b",
+      "input": {
+        "static_secret_hex": "5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb"
+      }
+    },
+    {
+      "description": "X25519 shared secret: DH(a, B) == DH(b, A)",
+      "expected_output": {
+        "commutative": true,
+        "shared_secret_hex": "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742"
+      },
+      "id": "x25519-shared-secret",
+      "input": {
+        "public_a_hex": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+        "public_b_hex": "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
+        "secret_a_hex": "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+        "secret_b_hex": "5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb"
+      }
+    },
+    {
+      "description": "X25519 shared secret with minimal secret (0x01 followed by zeros)",
+      "expected_output": {
+        "public_c_hex": "2fe57da347cd62431528daac5fbb290730fff684afc4cfc2ed90995f58cb3b74",
+        "shared_secret_a_c_hex": "2108adf6afe8883b77ac565e807159be646f7f35275bb0a9bc4ed29759ee665b"
+      },
+      "id": "x25519-shared-secret-2",
+      "input": {
+        "public_a_hex": "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
+        "public_c_hex": "2fe57da347cd62431528daac5fbb290730fff684afc4cfc2ed90995f58cb3b74",
+        "secret_a_hex": "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+        "secret_c_hex": "0100000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  ]
+}

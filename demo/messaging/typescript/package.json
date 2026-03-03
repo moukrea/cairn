@@ -1,0 +1,19 @@
+{
+  "name": "cairn-chat-ts",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "cairn-chat": "./dist/index.mjs"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "start": "node dist/index.mjs"
+  },
+  "dependencies": {
+    "cairn-p2p": "file:../../../ts/cairn-p2p"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0"
+  }
+}

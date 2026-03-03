@@ -1,0 +1,172 @@
+# Rendezvous ID rotation boundary tests
+# Validates: same-epoch derivation, overlap window, expiry, clock skew tolerance
+# Rendezvous IDs rotate every 24h with 1h overlap and 5-min clock tolerance
+
+scenarios:
+  - scenario: rendezvous-rotation-same-epoch
+    description: Both peers derive identical rendezvous ID from same secret and epoch
+    tier: 0
+    category: crypto
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: peer_a
+        params:
+          operation: rendezvous_id
+          shared_secret_hex: "4242424242424242424242424242424242424242424242424242424242424242"
+          epoch_seconds: 1704067200  # 2024-01-01 00:00:00 UTC
+          hkdf_info: "cairn-rendezvous-id-v1"
+      - type: verify_crypto
+        actor: peer_b
+        params:
+          operation: rendezvous_id
+          shared_secret_hex: "4242424242424242424242424242424242424242424242424242424242424242"
+          epoch_seconds: 1704067200
+          hkdf_info: "cairn-rendezvous-id-v1"
+    expected:
+      - { type: crypto_match, params: { description: "Both peers derive identical rendezvous ID from same inputs" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: rendezvous-rotation-overlap-window
+    description: During 1h overlap window, both old and new rendezvous IDs are valid for discovery
+    tier: 0
+    category: crypto
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      # Peer A uses epoch T (current window)
+      - type: verify_crypto
+        actor: peer_a
+        params:
+          operation: rendezvous_id
+          shared_secret_hex: "4242424242424242424242424242424242424242424242424242424242424242"
+          epoch_seconds: 1704067200  # 2024-01-01 00:00:00 UTC (epoch T)
+          hkdf_info: "cairn-rendezvous-id-v1"
+      # Peer B uses epoch T+24h (next window)
+      - type: verify_crypto
+        actor: peer_b
+        params:
+          operation: rendezvous_id
+          shared_secret_hex: "4242424242424242424242424242424242424242424242424242424242424242"
+          epoch_seconds: 1704153600  # 2024-01-02 00:00:00 UTC (epoch T+24h)
+          hkdf_info: "cairn-rendezvous-id-v1"
+      # Peer A also publishes the next-epoch ID during overlap window [T+23h, T+25h]
+      - type: verify_crypto
+        actor: peer_a
+        params:
+          operation: rendezvous_id_overlap
+          shared_secret_hex: "4242424242424242424242424242424242424242424242424242424242424242"
+          current_epoch_seconds: 1704067200
+          next_epoch_seconds: 1704153600
+          current_time_seconds: 1704150000  # T+23h (within overlap)
+          hkdf_info: "cairn-rendezvous-id-v1"
+    expected:
+      - { type: crypto_match, params: { description: "During overlap window, peer publishing both IDs can be discovered by peer using either epoch" } }
+      - { type: status, params: { overlap_active: true, both_ids_valid: true } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: rendezvous-rotation-expired
+    description: After overlap window expires (>1h past rotation), old rendezvous ID is no longer valid
+    tier: 0
+    category: crypto
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      # Peer A uses old epoch T
+      - type: verify_crypto
+        actor: peer_a
+        params:
+          operation: rendezvous_id
+          shared_secret_hex: "4242424242424242424242424242424242424242424242424242424242424242"
+          epoch_seconds: 1704067200  # 2024-01-01 00:00:00 UTC
+          hkdf_info: "cairn-rendezvous-id-v1"
+      # Peer B uses new epoch T+24h
+      - type: verify_crypto
+        actor: peer_b
+        params:
+          operation: rendezvous_id
+          shared_secret_hex: "4242424242424242424242424242424242424242424242424242424242424242"
+          epoch_seconds: 1704153600  # 2024-01-02 00:00:00 UTC
+          hkdf_info: "cairn-rendezvous-id-v1"
+      # Current time is well past overlap (T+26h)
+      - type: verify_crypto
+        actor: peer_a
+        params:
+          operation: rendezvous_id_check_expiry
+          current_time_seconds: 1704160800  # T+26h (past overlap window)
+          epoch_seconds: 1704067200
+          overlap_hours: 1
+    expected:
+      - { type: crypto_match, params: { description: "Old ID no longer valid after overlap window" } }
+      - { type: status, params: { old_id_expired: true, overlap_active: false } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: rendezvous-rotation-clock-skew
+    description: Peers with 5-minute clock skew still derive compatible rendezvous IDs
+    tier: 0
+    category: crypto
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      # Peer A clock is accurate (exactly at rotation boundary)
+      - type: verify_crypto
+        actor: peer_a
+        params:
+          operation: rendezvous_id
+          shared_secret_hex: "4242424242424242424242424242424242424242424242424242424242424242"
+          epoch_seconds: 1704153600  # 2024-01-02 00:00:00 UTC (exactly at boundary)
+          hkdf_info: "cairn-rendezvous-id-v1"
+      # Peer B clock is 5 minutes ahead (already past boundary)
+      - type: verify_crypto
+        actor: peer_b
+        params:
+          operation: rendezvous_id
+          shared_secret_hex: "4242424242424242424242424242424242424242424242424242424242424242"
+          epoch_seconds: 1704153600  # Same epoch floor despite 5-min offset
+          clock_offset_seconds: 300
+          hkdf_info: "cairn-rendezvous-id-v1"
+    expected:
+      - { type: crypto_match, params: { description: "Both peers derive same rendezvous ID despite 5-min clock skew" } }
+      - { type: status, params: { clock_tolerance_met: true, max_skew_seconds: 300 } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: rendezvous-rotation-different-secrets
+    description: Different shared secrets produce different rendezvous IDs (isolation)
+    tier: 0
+    category: crypto
+    participants:
+      - { role: pair_ab, lang: any }
+      - { role: pair_cd, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: pair_ab
+        params:
+          operation: rendezvous_id
+          shared_secret_hex: "4242424242424242424242424242424242424242424242424242424242424242"
+          epoch_seconds: 1704067200
+          hkdf_info: "cairn-rendezvous-id-v1"
+      - type: verify_crypto
+        actor: pair_cd
+        params:
+          operation: rendezvous_id
+          shared_secret_hex: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          epoch_seconds: 1704067200
+          hkdf_info: "cairn-rendezvous-id-v1"
+    expected:
+      - { type: crypto_mismatch, params: { description: "Different secrets produce different rendezvous IDs (pair isolation)" } }
+    timeout_ms: 2000
+    budget_ms: 2000

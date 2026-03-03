@@ -1,0 +1,35 @@
+# Mesh route selection tests — shortest hop count preferred, then lowest latency
+
+scenarios:
+  - scenario: mesh-route-select-shortest
+    description: "Multiple paths available — shortest hop count preferred"
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: relay_b, lang: any }
+      - { role: relay_c, lang: any }
+      - { role: peer_d, lang: any }
+    network:
+      topology:
+        # Path 1: A->B->D (2 hops)
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_peer_d: { reachable: true }
+        # Path 2: A->C->B->D (3 hops)
+        peer_a_to_relay_c: { reachable: true }
+        relay_c_to_relay_b: { reachable: true }
+        # A cannot reach D directly
+        peer_a_to_peer_d: { reachable: false }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-rsel-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-rsel-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-rsel-bd-psk" } }
+      - { type: pair, actor: peer_d, params: { mechanism: psk, flow: initiation, psk: "test-rsel-bd-psk" } }
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-rsel-ac-psk" } }
+      - { type: pair, actor: relay_c, params: { mechanism: psk, flow: initiation, psk: "test-rsel-ac-psk" } }
+      - { type: send_data, actor: peer_a, params: { destination: peer_d, channel: route-test, payload_hex: "73686f72746573742070617468" } }
+    expected:
+      - { type: route_found, params: { selected_hops: 2, path: [peer_a, relay_b, peer_d] } }
+      - { type: message_received, actor: peer_d, params: { payload_hex: "73686f72746573742070617468" } }
+    timeout_ms: 20000
+    budget_ms: 20000

@@ -1,0 +1,82 @@
+# Double Ratchet interop tests
+# Given identical initial state (root key, DH keys from fixture), both implementations
+# produce identical ciphertext and advance ratchet identically
+
+scenarios:
+  - scenario: crypto-ratchet-init
+    description: Double Ratchet initialization from identical state produces identical first message
+    tier: 0
+    category: crypto
+    participants:
+      - { role: impl_a, lang: any }
+      - { role: impl_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: impl_a
+        params:
+          operation: double_ratchet_init
+          fixture: fixtures/ratchet/ratchet-vectors.cbor
+          step: init_sender
+      - type: verify_crypto
+        actor: impl_b
+        params:
+          operation: double_ratchet_init
+          fixture: fixtures/ratchet/ratchet-vectors.cbor
+          step: init_sender
+    expected:
+      - { type: crypto_match, params: { description: "Identical initial state produces identical first ciphertext" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: crypto-ratchet-sequence
+    description: Multi-message ratchet sequence produces matching ciphertext at each step
+    tier: 0
+    category: crypto
+    participants:
+      - { role: impl_a, lang: any }
+      - { role: impl_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: impl_a
+        params:
+          operation: double_ratchet_sequence
+          fixture: fixtures/ratchet/ratchet-vectors.cbor
+          message_count: 5
+      - type: verify_crypto
+        actor: impl_b
+        params:
+          operation: double_ratchet_sequence
+          fixture: fixtures/ratchet/ratchet-vectors.cbor
+          message_count: 5
+    expected:
+      - { type: crypto_match, params: { description: "All 5 messages produce identical ciphertext" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: crypto-ratchet-cross-decrypt
+    description: Message encrypted by impl A decrypts correctly by impl B
+    tier: 0
+    category: crypto
+    participants:
+      - { role: sender, lang: any }
+      - { role: receiver, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: sender
+        params:
+          operation: double_ratchet_encrypt
+          fixture: fixtures/ratchet/ratchet-vectors.cbor
+          plaintext_hex: "48656c6c6f20446f75626c65205261746368657421"
+      - type: verify_crypto
+        actor: receiver
+        params:
+          operation: double_ratchet_decrypt
+          fixture: fixtures/ratchet/ratchet-vectors.cbor
+          ciphertext_source: sender
+    expected:
+      - { type: crypto_match, params: { description: "Cross-implementation decrypt recovers original plaintext" } }
+    timeout_ms: 2000
+    budget_ms: 2000

@@ -1,0 +1,186 @@
+# Emoji SAS pairing interop tests — all 10 language pairs
+# Mechanism: Emoji SAS (4-emoji sequence from handshake transcript)
+# Flow: Standard (verification)
+# Validates: 4-emoji sequence matches, HKDF->4bytes->4 indices (byte mod 64)->EMOJI_TABLE
+
+scenarios:
+  - scenario: pair-sas-emoji-rust-ts
+    description: Emoji Sas pairing between RUST and TypeScript
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: emoji_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: emoji_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "4-emoji SAS sequence matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-emoji-rust-go
+    description: Emoji Sas pairing between RUST and GO
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: emoji_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: emoji_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "4-emoji SAS sequence matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-emoji-rust-py
+    description: Emoji Sas pairing between RUST and PY
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: emoji_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: emoji_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "4-emoji SAS sequence matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-emoji-rust-php
+    description: Emoji Sas pairing between RUST and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: emoji_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: emoji_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "4-emoji SAS sequence matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-emoji-ts-go
+    description: Emoji Sas pairing between TypeScript and GO
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: emoji_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: emoji_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "4-emoji SAS sequence matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-emoji-ts-py
+    description: Emoji Sas pairing between TypeScript and PY
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: emoji_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: emoji_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "4-emoji SAS sequence matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-emoji-ts-php
+    description: Emoji Sas pairing between TypeScript and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: emoji_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: emoji_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "4-emoji SAS sequence matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-emoji-go-py
+    description: Emoji Sas pairing between GO and PY
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: emoji_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: emoji_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "4-emoji SAS sequence matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-emoji-go-php
+    description: Emoji Sas pairing between GO and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: emoji_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: emoji_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "4-emoji SAS sequence matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-sas-emoji-py-php
+    description: Emoji Sas pairing between PY and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: py }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: initiator, params: { mechanism: emoji_sas, flow: standard } }
+      - { type: pair, actor: responder, params: { mechanism: emoji_sas, flow: standard } }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "4-emoji SAS sequence matches on both sides" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+

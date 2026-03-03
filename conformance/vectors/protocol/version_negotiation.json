@@ -1,0 +1,151 @@
+{
+  "description": "Version negotiation test vectors. The select_version algorithm iterates the initiator's versions (highest first) and returns the first match in the responder's list.",
+  "vectors": [
+    {
+      "description": "Both peers support only v1",
+      "expected_output": {
+        "error": null,
+        "selected_version": 1
+      },
+      "id": "version-both-v1",
+      "input": {
+        "initiator_versions": [
+          1
+        ],
+        "responder_versions": [
+          1
+        ]
+      }
+    },
+    {
+      "description": "Initiator supports v3,v2,v1 but responder only v1 — select v1",
+      "expected_output": {
+        "error": null,
+        "selected_version": 1
+      },
+      "id": "version-initiator-higher",
+      "input": {
+        "initiator_versions": [
+          3,
+          2,
+          1
+        ],
+        "responder_versions": [
+          1
+        ]
+      }
+    },
+    {
+      "description": "Select highest mutually supported version (v3)",
+      "expected_output": {
+        "error": null,
+        "selected_version": 3
+      },
+      "id": "version-highest-mutual",
+      "input": {
+        "initiator_versions": [
+          5,
+          3,
+          1
+        ],
+        "responder_versions": [
+          4,
+          3,
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "description": "No common version — must return VersionMismatch error",
+      "expected_output": {
+        "error": "VersionMismatch",
+        "selected_version": null
+      },
+      "id": "version-no-common",
+      "input": {
+        "initiator_versions": [
+          3,
+          2
+        ],
+        "responder_versions": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "description": "Empty initiator version list — must return error",
+      "expected_output": {
+        "error": "VersionMismatch",
+        "selected_version": null
+      },
+      "id": "version-empty-initiator",
+      "input": {
+        "initiator_versions": [],
+        "responder_versions": [
+          1
+        ]
+      }
+    },
+    {
+      "description": "Empty responder version list — must return error",
+      "expected_output": {
+        "error": "VersionMismatch",
+        "selected_version": null
+      },
+      "id": "version-empty-responder",
+      "input": {
+        "initiator_versions": [
+          1
+        ],
+        "responder_versions": []
+      }
+    },
+    {
+      "description": "Both peers support exactly one version and it matches",
+      "expected_output": {
+        "error": null,
+        "selected_version": 2
+      },
+      "id": "version-single-match",
+      "input": {
+        "initiator_versions": [
+          2
+        ],
+        "responder_versions": [
+          2
+        ]
+      }
+    },
+    {
+      "description": "Many versions offered, only v5 in common",
+      "expected_output": {
+        "error": null,
+        "selected_version": 5
+      },
+      "id": "version-many-one-match",
+      "input": {
+        "initiator_versions": [
+          10,
+          9,
+          8,
+          7,
+          6,
+          5,
+          4,
+          3,
+          2,
+          1
+        ],
+        "responder_versions": [
+          20,
+          19,
+          18,
+          17,
+          5
+        ]
+      }
+    }
+  ]
+}

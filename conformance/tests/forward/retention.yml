@@ -1,0 +1,81 @@
+# Store-and-forward retention and deduplication tests
+
+scenarios:
+  - scenario: forward-retention-age
+    description: Messages older than 7 days are purged
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: any }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-ret-s-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-ret-s-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-ret-r-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-ret-r-psk" } }
+      - { type: disconnect, actor: recipient, params: {} }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "6f6c64206d7367", simulate_age_days: 8 } }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "6e6577206d7367" } }
+      - { type: reconnect, actor: recipient, params: {} }
+    expected:
+      - type: message_received
+        actor: recipient
+        params:
+          payload_hex: "6e6577206d7367"
+          old_message_purged: true
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: forward-retention-quota
+    description: Messages exceeding 1000/peer quota are purged (oldest first)
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: any }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-quota-s-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-quota-s-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-quota-r-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-quota-r-psk" } }
+      - { type: disconnect, actor: recipient, params: {} }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, bulk_count: 1001 } }
+      - { type: reconnect, actor: recipient, params: {} }
+    expected:
+      - type: status
+        actor: server
+        params:
+          queue_max: 1000
+          oldest_purged: true
+    timeout_ms: 60000
+    budget_ms: 30000
+
+  - scenario: forward-dedup
+    description: Duplicate UUID v7 message IDs discarded by recipient
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: any }
+      - { role: server, lang: rust }
+      - { role: recipient, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-dedup-s-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-dedup-s-psk" } }
+      - { type: pair, actor: recipient, params: { mechanism: psk, flow: initiation, psk: "test-fwd-dedup-r-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-dedup-r-psk" } }
+      - { type: disconnect, actor: recipient, params: {} }
+      - { type: send_forward, actor: sender, params: { destination: recipient, via: server, payload_hex: "64656475702074657374", duplicate: true } }
+      - { type: reconnect, actor: recipient, params: {} }
+    expected:
+      - type: status
+        actor: recipient
+        params:
+          messages_received: 1
+          duplicates_discarded: true
+    timeout_ms: 30000
+    budget_ms: 30000

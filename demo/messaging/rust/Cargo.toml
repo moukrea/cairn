@@ -1,0 +1,15 @@
+[package]
+name = "cairn-chat"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+
+[[bin]]
+name = "cairn-chat"
+path = "src/main.rs"
+
+[dependencies]
+cairn-p2p = { path = "../../../packages/rs/cairn-p2p" }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

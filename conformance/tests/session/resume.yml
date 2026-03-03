@@ -1,0 +1,105 @@
+# Session resumption tests — disconnect and resume within 24h expiry
+# Validates: session ID preserved, ratchet advanced, sequence synced, queued messages retransmitted
+
+scenarios:
+  - scenario: session-resume-rust-ts
+    description: Session resumption between Rust and TypeScript after simulated disconnect
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: rust }
+      - { role: peer_b, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-resume-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-resume-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: send_data, actor: peer_a, params: { channel: chat, payload_hex: "6265666f7265" } }
+      - { type: disconnect, actor: peer_a, params: { duration_ms: 3000 } }
+      - { type: send_data, actor: peer_b, params: { channel: chat, payload_hex: "647572696e67", queued: true } }
+      - { type: reconnect, actor: peer_a, params: {} }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, session_id_preserved: true } }
+      - { type: message_received, actor: peer_a, params: { channel: chat, payload_hex: "647572696e67" } }
+      - { type: status, params: { ratchet_advanced: true, sequence_synced: true } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-resume-go-py
+    description: Session resumption between Go and Python after simulated disconnect
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: go }
+      - { role: peer_b, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-resume-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-resume-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: send_data, actor: peer_a, params: { channel: chat, payload_hex: "6265666f7265" } }
+      - { type: disconnect, actor: peer_a, params: { duration_ms: 3000 } }
+      - { type: send_data, actor: peer_b, params: { channel: chat, payload_hex: "647572696e67", queued: true } }
+      - { type: reconnect, actor: peer_a, params: {} }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, session_id_preserved: true } }
+      - { type: message_received, actor: peer_a, params: { channel: chat, payload_hex: "647572696e67" } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-resume-ts-php
+    description: Session resumption between TypeScript and PHP after simulated disconnect
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: ts }
+      - { role: peer_b, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-resume-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-resume-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: disconnect, actor: peer_a, params: { duration_ms: 3000 } }
+      - { type: reconnect, actor: peer_a, params: {} }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, session_id_preserved: true } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-resume-rust-php
+    description: Session resumption between Rust and PHP
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: rust }
+      - { role: peer_b, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-resume-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-resume-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: disconnect, actor: peer_a, params: { duration_ms: 3000 } }
+      - { type: reconnect, actor: peer_a, params: {} }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, session_id_preserved: true } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-resume-go-php
+    description: Session resumption between Go and PHP
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: go }
+      - { role: peer_b, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-resume-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-resume-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: disconnect, actor: peer_a, params: { duration_ms: 3000 } }
+      - { type: reconnect, actor: peer_a, params: {} }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, session_id_preserved: true } }
+    timeout_ms: 15000
+    budget_ms: 15000

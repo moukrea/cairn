@@ -1,0 +1,91 @@
+# HKDF-SHA256 interop tests
+# Given identical IKM, salt, info, HKDF-SHA256 output matches across implementations
+
+scenarios:
+  - scenario: crypto-hkdf-session-key
+    description: HKDF with session key info produces matching output
+    tier: 0
+    category: crypto
+    participants:
+      - { role: impl_a, lang: any }
+      - { role: impl_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: impl_a
+        params:
+          operation: hkdf_sha256
+          fixture: fixtures/keys/hkdf-vectors.cbor
+          info: "cairn-session-key-v1"
+      - type: verify_crypto
+        actor: impl_b
+        params:
+          operation: hkdf_sha256
+          fixture: fixtures/keys/hkdf-vectors.cbor
+          info: "cairn-session-key-v1"
+    expected:
+      - { type: crypto_match, params: { description: "HKDF output matches for session key derivation" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: crypto-hkdf-rendezvous
+    description: HKDF with rendezvous info produces matching output
+    tier: 0
+    category: crypto
+    participants:
+      - { role: impl_a, lang: any }
+      - { role: impl_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: impl_a
+        params:
+          operation: hkdf_sha256
+          fixture: fixtures/keys/hkdf-vectors.cbor
+          info: "cairn-rendezvous-id-v1"
+      - type: verify_crypto
+        actor: impl_b
+        params:
+          operation: hkdf_sha256
+          fixture: fixtures/keys/hkdf-vectors.cbor
+          info: "cairn-rendezvous-id-v1"
+    expected:
+      - { type: crypto_match, params: { description: "HKDF output matches for rendezvous ID derivation" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: crypto-hkdf-all-constants
+    description: HKDF verified for all 5 domain separation constants
+    tier: 0
+    category: crypto
+    participants:
+      - { role: impl_a, lang: any }
+      - { role: impl_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_crypto
+        actor: impl_a
+        params:
+          operation: hkdf_sha256_batch
+          fixture: fixtures/keys/hkdf-vectors.cbor
+          info_constants:
+            - "cairn-session-key-v1"
+            - "cairn-rendezvous-id-v1"
+            - "cairn-sas-derivation-v1"
+            - "cairn-chain-key-v1"
+            - "cairn-message-key-v1"
+      - type: verify_crypto
+        actor: impl_b
+        params:
+          operation: hkdf_sha256_batch
+          fixture: fixtures/keys/hkdf-vectors.cbor
+          info_constants:
+            - "cairn-session-key-v1"
+            - "cairn-rendezvous-id-v1"
+            - "cairn-sas-derivation-v1"
+            - "cairn-chain-key-v1"
+            - "cairn-message-key-v1"
+    expected:
+      - { type: crypto_match, params: { description: "All 5 HKDF domain separation constants produce matching output" } }
+    timeout_ms: 2000
+    budget_ms: 2000

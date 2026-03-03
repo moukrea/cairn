@@ -1,0 +1,178 @@
+# Session re-establishment tests — after expiry (>24h), full Noise XX re-handshake
+# Validates: new session ID, fresh Double Ratchet, no re-pairing required
+
+scenarios:
+  - scenario: session-reestablish-basic
+    description: Session re-establishment after simulated 24h expiry
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-reest-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-reest-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - type: disconnect
+        actor: peer_a
+        params:
+          simulate_expiry: true
+          elapsed_hours: 25
+      - { type: reconnect, actor: peer_a, params: {} }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, new_session_id: true } }
+      - { type: status, params: { handshake: "noise_xx", fresh_ratchet: true, re_pairing: false } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-reestablish-cross-lang
+    description: Session re-establishment between different languages after expiry
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: rust }
+      - { role: peer_b, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-reest-cross-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-reest-cross-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: disconnect, actor: peer_a, params: { simulate_expiry: true, elapsed_hours: 25 } }
+      - { type: reconnect, actor: peer_a, params: {} }
+      - { type: send_data, actor: peer_a, params: { channel: test, payload_hex: "61667465722072656573746162" } }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, new_session_id: true } }
+      - { type: message_received, actor: peer_b, params: { channel: test, payload_hex: "61667465722072656573746162" } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-reestablish-go-py
+    description: Go-Python session re-establishment after expiry
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: go }
+      - { role: peer_b, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-reest-go-py-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-reest-go-py-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: disconnect, actor: peer_a, params: { simulate_expiry: true, elapsed_hours: 25 } }
+      - { type: reconnect, actor: peer_a, params: {} }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, new_session_id: true } }
+      - { type: status, params: { handshake: "noise_xx", fresh_ratchet: true, re_pairing: false } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-reestablish-php-rust
+    description: PHP-Rust session re-establishment after expiry
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: php }
+      - { role: peer_b, lang: rust }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-reest-php-rust-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-reest-php-rust-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: disconnect, actor: peer_a, params: { simulate_expiry: true, elapsed_hours: 25 } }
+      - { type: reconnect, actor: peer_a, params: {} }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, new_session_id: true } }
+      - { type: status, params: { handshake: "noise_xx", fresh_ratchet: true, re_pairing: false } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-reestablish-ts-go
+    description: TypeScript-Go session re-establishment after expiry
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: ts }
+      - { role: peer_b, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-reest-ts-go-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-reest-ts-go-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: disconnect, actor: peer_a, params: { simulate_expiry: true, elapsed_hours: 25 } }
+      - { type: reconnect, actor: peer_a, params: {} }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, new_session_id: true } }
+      - { type: status, params: { handshake: "noise_xx", fresh_ratchet: true, re_pairing: false } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-reestablish-py-php
+    description: Python-PHP session re-establishment after expiry
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: py }
+      - { role: peer_b, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-reest-py-php-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-reest-py-php-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: disconnect, actor: peer_a, params: { simulate_expiry: true, elapsed_hours: 25 } }
+      - { type: reconnect, actor: peer_a, params: {} }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, new_session_id: true } }
+      - { type: status, params: { handshake: "noise_xx", fresh_ratchet: true, re_pairing: false } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-reestablish-data-transfer
+    description: Bidirectional data transfer works after session re-establishment
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: rust }
+      - { role: peer_b, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-reest-data-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-reest-data-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: disconnect, actor: peer_a, params: { simulate_expiry: true, elapsed_hours: 25 } }
+      - { type: reconnect, actor: peer_a, params: {} }
+      # Send in both directions on the re-established session
+      - { type: send_data, actor: peer_a, params: { channel: test, payload_hex: "612d746f2d62" } }
+      - { type: send_data, actor: peer_b, params: { channel: test, payload_hex: "622d746f2d61" } }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected, new_session_id: true } }
+      - { type: message_received, actor: peer_b, params: { channel: test, payload_hex: "612d746f2d62" } }
+      - { type: message_received, actor: peer_a, params: { channel: test, payload_hex: "622d746f2d61" } }
+      - { type: status, params: { handshake: "noise_xx", fresh_ratchet: true, re_pairing: false } }
+    timeout_ms: 15000
+    budget_ms: 15000
+
+  - scenario: session-reestablish-asymmetric-expiry
+    description: Peer A session expired but peer B session still valid — triggers re-establishment
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: ts }
+      - { role: peer_b, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-reest-asym-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-reest-asym-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      # Only peer_a's session expires; peer_b still has valid session (<24h)
+      - { type: disconnect, actor: peer_a, params: { simulate_expiry: true, elapsed_hours: 25 } }
+      - { type: disconnect, actor: peer_b, params: { simulate_expiry: false, elapsed_hours: 12 } }
+      - { type: reconnect, actor: peer_a, params: {} }
+      - { type: reconnect, actor: peer_b, params: {} }
+    expected:
+      # Both peers end up with a fresh session despite asymmetric expiry
+      - { type: session_state, actor: peer_a, params: { state: Connected, new_session_id: true } }
+      - { type: session_state, actor: peer_b, params: { state: Connected, new_session_id: true } }
+      - { type: status, params: { handshake: "noise_xx", fresh_ratchet: true, re_pairing: false } }
+    timeout_ms: 15000
+    budget_ms: 15000

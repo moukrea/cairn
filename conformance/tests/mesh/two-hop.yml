@@ -1,0 +1,203 @@
+# Mesh 2-hop routing tests — A->B->C with E2E encryption
+# A cannot reach C directly; B relays with opaque ciphertext
+
+scenarios:
+  - scenario: mesh-2hop-rust-ts-go
+    description: "Rust(A)->TypeScript(B)->Go(C): data routed, E2E encryption intact"
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: rust }
+      - { role: relay_b, lang: ts }
+      - { role: peer_c, lang: go }
+    network:
+      topology:
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_peer_c: { reachable: true }
+        peer_a_to_peer_c: { reachable: false }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc-psk" } }
+      - { type: pair, actor: peer_c, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc-psk" } }
+      - { type: send_data, actor: peer_a, params: { destination: peer_c, channel: mesh-test, payload_hex: "6d65736820726f7574696e67" } }
+    expected:
+      - { type: message_received, actor: peer_c, params: { channel: mesh-test, payload_hex: "6d65736820726f7574696e67" } }
+      - { type: route_found, params: { hops: 2, path: [peer_a, relay_b, peer_c] } }
+      - { type: status, actor: relay_b, params: { saw_only_opaque_ciphertext: true } }
+    timeout_ms: 20000
+    budget_ms: 20000
+
+  - scenario: mesh-2hop-py-php-rust
+    description: "Python(A)->PHP(B)->Rust(C): cross-language mesh relay"
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: py }
+      - { role: relay_b, lang: php }
+      - { role: peer_c, lang: rust }
+    network:
+      topology:
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_peer_c: { reachable: true }
+        peer_a_to_peer_c: { reachable: false }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab2-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab2-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc2-psk" } }
+      - { type: pair, actor: peer_c, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc2-psk" } }
+      - { type: send_data, actor: peer_a, params: { destination: peer_c, channel: mesh-test, payload_hex: "63726f7373206c616e67" } }
+    expected:
+      - { type: message_received, actor: peer_c, params: { channel: mesh-test, payload_hex: "63726f7373206c616e67" } }
+      - { type: route_found, params: { hops: 2 } }
+    timeout_ms: 20000
+    budget_ms: 20000
+
+  - scenario: mesh-2hop-ts-go-py
+    description: "TypeScript(A)->Go(B)->Python(C): additional language triple"
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: ts }
+      - { role: relay_b, lang: go }
+      - { role: peer_c, lang: py }
+    network:
+      topology:
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_peer_c: { reachable: true }
+        peer_a_to_peer_c: { reachable: false }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab3-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab3-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc3-psk" } }
+      - { type: pair, actor: peer_c, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc3-psk" } }
+      - { type: send_data, actor: peer_a, params: { destination: peer_c, channel: mesh-test, payload_hex: "74732d676f2d7079" } }
+    expected:
+      - { type: message_received, actor: peer_c, params: { channel: mesh-test, payload_hex: "74732d676f2d7079" } }
+      - { type: route_found, params: { hops: 2, path: [peer_a, relay_b, peer_c] } }
+    timeout_ms: 20000
+    budget_ms: 20000
+
+  - scenario: mesh-2hop-go-rust-php
+    description: "Go(A)->Rust(B)->PHP(C): additional language triple"
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: go }
+      - { role: relay_b, lang: rust }
+      - { role: peer_c, lang: php }
+    network:
+      topology:
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_peer_c: { reachable: true }
+        peer_a_to_peer_c: { reachable: false }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab4-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab4-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc4-psk" } }
+      - { type: pair, actor: peer_c, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc4-psk" } }
+      - { type: send_data, actor: peer_a, params: { destination: peer_c, channel: mesh-test, payload_hex: "676f2d72757374" } }
+    expected:
+      - { type: message_received, actor: peer_c, params: { channel: mesh-test, payload_hex: "676f2d72757374" } }
+      - { type: route_found, params: { hops: 2, path: [peer_a, relay_b, peer_c] } }
+    timeout_ms: 20000
+    budget_ms: 20000
+
+  - scenario: mesh-2hop-php-ts-rust
+    description: "PHP(A)->TypeScript(B)->Rust(C): additional language triple"
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: php }
+      - { role: relay_b, lang: ts }
+      - { role: peer_c, lang: rust }
+    network:
+      topology:
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_peer_c: { reachable: true }
+        peer_a_to_peer_c: { reachable: false }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab5-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab5-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc5-psk" } }
+      - { type: pair, actor: peer_c, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc5-psk" } }
+      - { type: send_data, actor: peer_a, params: { destination: peer_c, channel: mesh-test, payload_hex: "7068702d74732d7275" } }
+    expected:
+      - { type: message_received, actor: peer_c, params: { channel: mesh-test, payload_hex: "7068702d74732d7275" } }
+      - { type: route_found, params: { hops: 2, path: [peer_a, relay_b, peer_c] } }
+    timeout_ms: 20000
+    budget_ms: 20000
+
+  - scenario: mesh-2hop-py-rust-ts
+    description: "Python(A)->Rust(B)->TypeScript(C): additional language triple"
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: py }
+      - { role: relay_b, lang: rust }
+      - { role: peer_c, lang: ts }
+    network:
+      topology:
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_peer_c: { reachable: true }
+        peer_a_to_peer_c: { reachable: false }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab6-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-ab6-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc6-psk" } }
+      - { type: pair, actor: peer_c, params: { mechanism: psk, flow: initiation, psk: "test-mesh-bc6-psk" } }
+      - { type: send_data, actor: peer_a, params: { destination: peer_c, channel: mesh-test, payload_hex: "70792d72757374" } }
+    expected:
+      - { type: message_received, actor: peer_c, params: { channel: mesh-test, payload_hex: "70792d72757374" } }
+      - { type: route_found, params: { hops: 2, path: [peer_a, relay_b, peer_c] } }
+    timeout_ms: 20000
+    budget_ms: 20000
+
+  - scenario: mesh-2hop-e2e-encryption
+    description: Relay node cannot decrypt relayed data (E2E encryption verification)
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: rust }
+      - { role: relay_b, lang: go }
+      - { role: peer_c, lang: ts }
+    network:
+      topology:
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_peer_c: { reachable: true }
+        peer_a_to_peer_c: { reachable: false }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-mesh-e2e-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-e2e-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-e2e-bc-psk" } }
+      - { type: pair, actor: peer_c, params: { mechanism: psk, flow: initiation, psk: "test-mesh-e2e-bc-psk" } }
+      - { type: send_data, actor: peer_a, params: { destination: peer_c, channel: mesh-test, payload_hex: "7365637265742064617461" } }
+    expected:
+      - { type: message_received, actor: peer_c, params: { channel: mesh-test, payload_hex: "7365637265742064617461" } }
+      - { type: route_found, params: { hops: 2, path: [peer_a, relay_b, peer_c] } }
+      - { type: status, actor: relay_b, params: { saw_only_opaque_ciphertext: true, decrypt_attempt_fails: true } }
+    timeout_ms: 20000
+    budget_ms: 20000
+
+  - scenario: mesh-2hop-no-route
+    description: Routing fails when relay is not paired with destination
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: rust }
+      - { role: relay_b, lang: ts }
+      - { role: peer_c, lang: go }
+    network:
+      topology:
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_peer_c: { reachable: true }
+        peer_a_to_peer_c: { reachable: false }
+    actions:
+      # Only pair A<->B, NOT B<->C
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-mesh-noroute-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-mesh-noroute-ab-psk" } }
+      - { type: send_data, actor: peer_a, params: { destination: peer_c, channel: mesh-test, payload_hex: "756e726561636861626c65" } }
+    expected:
+      - { type: error, actor: peer_a, params: { error_type: no_route, description: "No route found to peer_c" } }
+    timeout_ms: 20000
+    budget_ms: 20000

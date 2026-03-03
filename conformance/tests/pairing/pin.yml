@@ -1,0 +1,226 @@
+# PIN code pairing interop tests — all 10 language pairs
+# Mechanism: Pin code (Crockford Base32, 8 chars XXXX-XXXX, 40 bits)
+# Flow: Initiation
+# Validates: Crockford Base32 format, i/l->1 o->0 normalization, SPAKE2 completion
+
+scenarios:
+  - scenario: pair-pin-rust-ts
+    description: PIN code pairing between Rust and TypeScript
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: pin, flow: initiation, pin_source: initiator }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: cbor_match, params: { description: "PIN is Crockford Base32 XXXX-XXXX" } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-pin-rust-go
+    description: PIN code pairing between Rust and Go
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: pin, flow: initiation, pin_source: initiator }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-pin-rust-py
+    description: PIN code pairing between Rust and Python
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: pin, flow: initiation, pin_source: initiator }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-pin-rust-php
+    description: PIN code pairing between Rust and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: rust }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: pin, flow: initiation, pin_source: initiator }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-pin-ts-go
+    description: PIN code pairing between TypeScript and Go
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: pin, flow: initiation, pin_source: initiator }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-pin-ts-py
+    description: PIN code pairing between TypeScript and Python
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: pin, flow: initiation, pin_source: initiator }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-pin-ts-php
+    description: PIN code pairing between TypeScript and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: ts }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: pin, flow: initiation, pin_source: initiator }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-pin-go-py
+    description: PIN code pairing between Go and Python
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: pin, flow: initiation, pin_source: initiator }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-pin-go-php
+    description: PIN code pairing between Go and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: go }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: pin, flow: initiation, pin_source: initiator }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-pin-py-php
+    description: PIN code pairing between Python and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - { role: initiator, lang: py }
+      - { role: responder, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: pin, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: pin, flow: initiation, pin_source: initiator }
+    expected:
+      - { type: status, actor: initiator, params: { pairing: complete } }
+      - { type: status, actor: responder, params: { pairing: complete } }
+      - { type: crypto_match, params: { description: "SPAKE2 shared secret matches" } }
+    timeout_ms: 30000
+    budget_ms: 30000

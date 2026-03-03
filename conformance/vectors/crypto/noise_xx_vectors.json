@@ -1,0 +1,87 @@
+{
+  "description": "Noise XX handshake test vectors for cairn. Since ephemeral keys are random, full transcripts are non-deterministic. Vectors cover protocol parameters, sub-operations (mix_hash, mix_key), and invariant properties.",
+  "vectors": [
+    {
+      "description": "Noise XX protocol initialization parameters",
+      "expected_output": {
+        "initial_chaining_key_hex": "4e6f6973655f58585f32353531395f436861436861506f6c795f534841323536",
+        "initial_handshake_hash_hex": "4e6f6973655f58585f32353531395f436861436861506f6c795f534841323536",
+        "note": "Protocol name is padded with zeros to 32 bytes since it is <= 32 bytes"
+      },
+      "id": "noise-xx-protocol-params",
+      "input": {
+        "aead_tag_size": 16,
+        "dh_key_size": 32,
+        "hash_size": 32,
+        "nonce_size": 12,
+        "protocol_name": "Noise_XX_25519_ChaChaPoly_SHA256",
+        "zero_nonce_hex": "000000000000000000000000"
+      }
+    },
+    {
+      "description": "Noise XX handshake message sizes (empty payload)",
+      "expected_output": {
+        "msg1_content": "ephemeral public key (32 bytes)",
+        "msg1_size": 32,
+        "msg2_content": "ephemeral(32) + encrypted_static(32+16tag) + encrypted_payload(0+16tag)",
+        "msg2_size": 96,
+        "msg3_content": "encrypted_static(32+16tag) + encrypted_payload(0+16tag)",
+        "msg3_size": 64
+      },
+      "id": "noise-xx-message-sizes",
+      "input": {
+        "pattern": "XX: -> e, <- e ee s es, -> s se"
+      }
+    },
+    {
+      "description": "mix_hash operation: h = SHA-256(h || data)",
+      "expected_output": {
+        "new_handshake_hash_hex": "38f021c9f9280dec681ced796a41592f93c47eee49e86530c262ff819566c93f"
+      },
+      "id": "noise-xx-mix-hash",
+      "input": {
+        "data_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+        "handshake_hash_hex": "4e6f6973655f58585f32353531395f436861436861506f6c795f534841323536"
+      }
+    },
+    {
+      "description": "mix_key operation: HKDF(ikm, salt=ck, info='') -> (new_ck, enc_key)",
+      "expected_output": {
+        "encryption_key_hex": "11048a094d72bfe206de56e3997593a439ca818b75d0762c314ab923fe62863f",
+        "new_chaining_key_hex": "076ba790a26c51d93bdb2c8a83bd51eb0d74c4b63d6612e6a34c754c22666e27"
+      },
+      "id": "noise-xx-mix-key",
+      "input": {
+        "chaining_key_hex": "4e6f6973655f58585f32353531395f436861436861506f6c795f534841323536",
+        "hkdf_info": "",
+        "input_key_material_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "description": "Session key derived from final chaining key via HKDF-SHA256",
+      "expected_output": {
+        "session_key_hex": "8d4f5ea93d02097489129f7fb0d783c78e35d05725668f486b7fc46cecc394f1"
+      },
+      "id": "noise-xx-session-key-derivation",
+      "input": {
+        "chaining_key_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "hkdf_info": "cairn-session-key-v1"
+      }
+    },
+    {
+      "description": "Noise XX handshake invariant properties that all implementations must satisfy",
+      "expected_output": {
+        "different_handshakes_produce_different_keys": true,
+        "initiator_knows_responder_static": true,
+        "initiator_session_key_equals_responder": true,
+        "initiator_transcript_hash_equals_responder": true,
+        "mismatched_pake_secrets_cause_decryption_failure": true,
+        "responder_knows_initiator_static": true
+      },
+      "id": "noise-xx-handshake-properties",
+      "input": {
+        "note": "These properties must hold for any valid Noise XX handshake"
+      }
+    }
+  ]
+}

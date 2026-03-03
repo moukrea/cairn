@@ -1,0 +1,312 @@
+# QR code pairing interop tests — all 10 language pairs
+# Mechanism: QR code (binary CBOR, EC Level M, max 256 bytes)
+# Flow: Initiation
+# Validates: CBOR payload roundtrip, SPAKE2 shared secret agreement, mutual trust stored
+
+scenarios:
+  - scenario: pair-qr-rust-ts
+    description: QR code pairing between Rust and TypeScript
+    tier: 0
+    category: pairing
+    participants:
+      - role: initiator
+        lang: rust
+      - role: responder
+        lang: ts
+    network:
+      nat_profile: open
+    actions:
+      - type: pair
+        actor: initiator
+        params:
+          mechanism: qr
+          flow: initiation
+      - type: pair
+        actor: responder
+        params:
+          mechanism: qr
+          flow: initiation
+          payload_source: initiator
+    expected:
+      - type: status
+        actor: initiator
+        params: { pairing: complete }
+      - type: status
+        actor: responder
+        params: { pairing: complete }
+      - type: cbor_match
+        params: { description: "QR payload valid CBOR, max 256 bytes" }
+      - type: crypto_match
+        params: { description: "SPAKE2 shared secret matches" }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-qr-rust-go
+    description: QR code pairing between Rust and Go
+    tier: 0
+    category: pairing
+    participants:
+      - role: initiator
+        lang: rust
+      - role: responder
+        lang: go
+    network:
+      nat_profile: open
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: qr, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: qr, flow: initiation, payload_source: initiator }
+    expected:
+      - type: status
+        actor: initiator
+        params: { pairing: complete }
+      - type: status
+        actor: responder
+        params: { pairing: complete }
+      - type: crypto_match
+        params: { description: "SPAKE2 shared secret matches" }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-qr-rust-py
+    description: QR code pairing between Rust and Python
+    tier: 0
+    category: pairing
+    participants:
+      - role: initiator
+        lang: rust
+      - role: responder
+        lang: py
+    network:
+      nat_profile: open
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: qr, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: qr, flow: initiation, payload_source: initiator }
+    expected:
+      - type: status
+        actor: initiator
+        params: { pairing: complete }
+      - type: status
+        actor: responder
+        params: { pairing: complete }
+      - type: crypto_match
+        params: { description: "SPAKE2 shared secret matches" }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-qr-rust-php
+    description: QR code pairing between Rust and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - role: initiator
+        lang: rust
+      - role: responder
+        lang: php
+    network:
+      nat_profile: open
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: qr, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: qr, flow: initiation, payload_source: initiator }
+    expected:
+      - type: status
+        actor: initiator
+        params: { pairing: complete }
+      - type: status
+        actor: responder
+        params: { pairing: complete }
+      - type: crypto_match
+        params: { description: "SPAKE2 shared secret matches" }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-qr-ts-go
+    description: QR code pairing between TypeScript and Go
+    tier: 0
+    category: pairing
+    participants:
+      - role: initiator
+        lang: ts
+      - role: responder
+        lang: go
+    network:
+      nat_profile: open
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: qr, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: qr, flow: initiation, payload_source: initiator }
+    expected:
+      - type: status
+        actor: initiator
+        params: { pairing: complete }
+      - type: status
+        actor: responder
+        params: { pairing: complete }
+      - type: crypto_match
+        params: { description: "SPAKE2 shared secret matches" }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-qr-ts-py
+    description: QR code pairing between TypeScript and Python
+    tier: 0
+    category: pairing
+    participants:
+      - role: initiator
+        lang: ts
+      - role: responder
+        lang: py
+    network:
+      nat_profile: open
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: qr, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: qr, flow: initiation, payload_source: initiator }
+    expected:
+      - type: status
+        actor: initiator
+        params: { pairing: complete }
+      - type: status
+        actor: responder
+        params: { pairing: complete }
+      - type: crypto_match
+        params: { description: "SPAKE2 shared secret matches" }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-qr-ts-php
+    description: QR code pairing between TypeScript and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - role: initiator
+        lang: ts
+      - role: responder
+        lang: php
+    network:
+      nat_profile: open
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: qr, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: qr, flow: initiation, payload_source: initiator }
+    expected:
+      - type: status
+        actor: initiator
+        params: { pairing: complete }
+      - type: status
+        actor: responder
+        params: { pairing: complete }
+      - type: crypto_match
+        params: { description: "SPAKE2 shared secret matches" }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-qr-go-py
+    description: QR code pairing between Go and Python
+    tier: 0
+    category: pairing
+    participants:
+      - role: initiator
+        lang: go
+      - role: responder
+        lang: py
+    network:
+      nat_profile: open
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: qr, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: qr, flow: initiation, payload_source: initiator }
+    expected:
+      - type: status
+        actor: initiator
+        params: { pairing: complete }
+      - type: status
+        actor: responder
+        params: { pairing: complete }
+      - type: crypto_match
+        params: { description: "SPAKE2 shared secret matches" }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-qr-go-php
+    description: QR code pairing between Go and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - role: initiator
+        lang: go
+      - role: responder
+        lang: php
+    network:
+      nat_profile: open
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: qr, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: qr, flow: initiation, payload_source: initiator }
+    expected:
+      - type: status
+        actor: initiator
+        params: { pairing: complete }
+      - type: status
+        actor: responder
+        params: { pairing: complete }
+      - type: crypto_match
+        params: { description: "SPAKE2 shared secret matches" }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: pair-qr-py-php
+    description: QR code pairing between Python and PHP
+    tier: 0
+    category: pairing
+    participants:
+      - role: initiator
+        lang: py
+      - role: responder
+        lang: php
+    network:
+      nat_profile: open
+    actions:
+      - type: pair
+        actor: initiator
+        params: { mechanism: qr, flow: initiation }
+      - type: pair
+        actor: responder
+        params: { mechanism: qr, flow: initiation, payload_source: initiator }
+    expected:
+      - type: status
+        actor: initiator
+        params: { pairing: complete }
+      - type: status
+        actor: responder
+        params: { pairing: complete }
+      - type: crypto_match
+        params: { description: "SPAKE2 shared secret matches" }
+    timeout_ms: 30000
+    budget_ms: 30000

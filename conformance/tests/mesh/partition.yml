@@ -1,0 +1,62 @@
+# Mesh partition and capacity tests
+
+scenarios:
+  - scenario: mesh-partition-route-fail
+    description: "Relay B disconnects — route fails, MeshRouteNotFound if no alternative"
+    tier: 0
+    category: mesh
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: relay_b, lang: any }
+      - { role: peer_c, lang: any }
+    network:
+      topology:
+        peer_a_to_relay_b: { reachable: true }
+        relay_b_to_peer_c: { reachable: true }
+        peer_a_to_peer_c: { reachable: false }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-part-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-part-ab-psk" } }
+      - { type: pair, actor: relay_b, params: { mechanism: psk, flow: initiation, psk: "test-part-bc-psk" } }
+      - { type: pair, actor: peer_c, params: { mechanism: psk, flow: initiation, psk: "test-part-bc-psk" } }
+      # Verify route works first
+      - { type: send_data, actor: peer_a, params: { destination: peer_c, channel: test, payload_hex: "6265666f7265" } }
+      # Now disconnect relay B
+      - { type: disconnect, actor: relay_b, params: {} }
+      - { type: wait, params: { duration_ms: 2000 } }
+      # Try to send again — should fail
+      - { type: send_data, actor: peer_a, params: { destination: peer_c, channel: test, payload_hex: "6166746572" } }
+    expected:
+      - type: error
+        actor: peer_a
+        params:
+          error_type: MeshRouteNotFound
+          description: "No route to peer_c after relay_b disconnected"
+    timeout_ms: 20000
+    budget_ms: 20000
+
+  - scenario: mesh-relay-capacity
+    description: "Relay peer at default capacity (10) — additional requests rejected"
+    tier: 0
+    category: mesh
+    participants:
+      - { role: relay, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: pair
+        actor: relay
+        params:
+          mechanism: psk
+          flow: initiation
+          bulk_peer_count: 11
+          relay_willing: true
+          relay_capacity: 10
+    expected:
+      - type: status
+        actor: relay
+        params:
+          active_relay_connections: 10
+          eleventh_rejected: true
+          description: "11th relay request rejected at capacity"
+    timeout_ms: 30000
+    budget_ms: 20000

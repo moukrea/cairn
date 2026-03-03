@@ -1,0 +1,32 @@
+FROM rust:1-bookworm AS builder
+
+WORKDIR /build
+
+# Copy workspace Cargo files first for dependency caching
+COPY Cargo.toml Cargo.lock ./
+COPY services/ services/
+COPY packages/rs/cairn-p2p/ packages/rs/cairn-p2p/
+COPY conformance/runners/rust-runner/ conformance/runners/rust-runner/
+
+RUN cargo build --release --workspace
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    iproute2 iptables ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/target/release/cairn-signal /usr/local/bin/
+COPY --from=builder /build/target/release/cairn-relay /usr/local/bin/
+COPY --from=builder /build/target/release/cairn-conformance-runner /usr/local/bin/
+
+# Copy the network shaper
+COPY conformance/network-shaper.sh /usr/local/bin/network-shaper
+RUN chmod +x /usr/local/bin/network-shaper
+
+WORKDIR /conformance
+COPY conformance/tests/ tests/
+COPY conformance/fixtures/ fixtures/
+COPY conformance/vectors/ vectors/
+
+ENTRYPOINT ["cairn-conformance-runner"]

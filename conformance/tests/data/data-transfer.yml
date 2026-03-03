@@ -1,0 +1,126 @@
+# Data transfer interop tests — DataMessage/DataAck/DataNack across language pairs
+# Validates: payload integrity, DataAck receipt, DataNack retransmission
+
+scenarios:
+  - scenario: data-send-recv-rust-ts
+    description: DataMessage send/receive between Rust and TypeScript
+    tier: 0
+    category: data
+    participants:
+      - { role: sender, lang: rust }
+      - { role: receiver, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-data-psk" } }
+      - { type: pair, actor: receiver, params: { mechanism: psk, flow: initiation, psk: "test-data-psk" } }
+      - { type: establish_session, actor: sender, params: {} }
+      - { type: open_channel, actor: sender, params: { name: test-data } }
+      - { type: send_data, actor: sender, params: { channel: test-data, payload_hex: "48656c6c6f20636169726e" } }
+    expected:
+      - { type: message_received, actor: receiver, params: { channel: test-data, payload_hex: "48656c6c6f20636169726e" } }
+      - { type: status, actor: sender, params: { ack_received: true } }
+    timeout_ms: 5000
+    budget_ms: 5000
+
+  - scenario: data-send-recv-rust-go
+    description: DataMessage send/receive between Rust and Go
+    tier: 0
+    category: data
+    participants:
+      - { role: sender, lang: rust }
+      - { role: receiver, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-data-psk" } }
+      - { type: pair, actor: receiver, params: { mechanism: psk, flow: initiation, psk: "test-data-psk" } }
+      - { type: establish_session, actor: sender, params: {} }
+      - { type: open_channel, actor: sender, params: { name: test-data } }
+      - { type: send_data, actor: sender, params: { channel: test-data, payload_hex: "48656c6c6f20636169726e" } }
+    expected:
+      - { type: message_received, actor: receiver, params: { channel: test-data, payload_hex: "48656c6c6f20636169726e" } }
+      - { type: status, actor: sender, params: { ack_received: true } }
+    timeout_ms: 5000
+    budget_ms: 5000
+
+  - scenario: data-send-recv-ts-py
+    description: DataMessage send/receive between TypeScript and Python
+    tier: 0
+    category: data
+    participants:
+      - { role: sender, lang: ts }
+      - { role: receiver, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-data-psk" } }
+      - { type: pair, actor: receiver, params: { mechanism: psk, flow: initiation, psk: "test-data-psk" } }
+      - { type: establish_session, actor: sender, params: {} }
+      - { type: open_channel, actor: sender, params: { name: test-data } }
+      - { type: send_data, actor: sender, params: { channel: test-data, payload_hex: "48656c6c6f20636169726e" } }
+    expected:
+      - { type: message_received, actor: receiver, params: { channel: test-data, payload_hex: "48656c6c6f20636169726e" } }
+      - { type: status, actor: sender, params: { ack_received: true } }
+    timeout_ms: 5000
+    budget_ms: 5000
+
+  - scenario: data-send-recv-go-php
+    description: DataMessage send/receive between Go and PHP
+    tier: 0
+    category: data
+    participants:
+      - { role: sender, lang: go }
+      - { role: receiver, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-data-psk" } }
+      - { type: pair, actor: receiver, params: { mechanism: psk, flow: initiation, psk: "test-data-psk" } }
+      - { type: establish_session, actor: sender, params: {} }
+      - { type: open_channel, actor: sender, params: { name: test-data } }
+      - { type: send_data, actor: sender, params: { channel: test-data, payload_hex: "48656c6c6f20636169726e" } }
+    expected:
+      - { type: message_received, actor: receiver, params: { channel: test-data, payload_hex: "48656c6c6f20636169726e" } }
+      - { type: status, actor: sender, params: { ack_received: true } }
+    timeout_ms: 5000
+    budget_ms: 5000
+
+  - scenario: data-send-recv-py-php
+    description: DataMessage send/receive between Python and PHP
+    tier: 0
+    category: data
+    participants:
+      - { role: sender, lang: py }
+      - { role: receiver, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-data-psk" } }
+      - { type: pair, actor: receiver, params: { mechanism: psk, flow: initiation, psk: "test-data-psk" } }
+      - { type: establish_session, actor: sender, params: {} }
+      - { type: open_channel, actor: sender, params: { name: test-data } }
+      - { type: send_data, actor: sender, params: { channel: test-data, payload_hex: "48656c6c6f20636169726e" } }
+    expected:
+      - { type: message_received, actor: receiver, params: { channel: test-data, payload_hex: "48656c6c6f20636169726e" } }
+      - { type: status, actor: sender, params: { ack_received: true } }
+    timeout_ms: 5000
+    budget_ms: 5000
+
+  # DataNack retransmission under packet loss
+  - scenario: data-nack-retransmit
+    description: DataNack triggers retransmission, eventual delivery confirmed
+    tier: 0
+    category: data
+    participants:
+      - { role: sender, lang: any }
+      - { role: receiver, lang: any }
+    network:
+      nat_profile: open
+      netem:
+        loss_pct: 30
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-nack-psk" } }
+      - { type: pair, actor: receiver, params: { mechanism: psk, flow: initiation, psk: "test-nack-psk" } }
+      - { type: establish_session, actor: sender, params: {} }
+      - { type: open_channel, actor: sender, params: { name: reliable-test } }
+      - { type: send_data, actor: sender, params: { channel: reliable-test, payload_hex: "7265747261736d69742074657374", reliable: true } }
+    expected:
+      - { type: message_received, actor: receiver, params: { channel: reliable-test, payload_hex: "7265747261736d69742074657374" } }
+    timeout_ms: 15000
+    budget_ms: 5000

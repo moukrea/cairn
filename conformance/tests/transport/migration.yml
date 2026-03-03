@@ -1,0 +1,32 @@
+# Transport migration test — transparent upgrade when conditions improve
+
+scenarios:
+  - scenario: transport-migration-ws-to-quic
+    description: "Start on WebSocket (443 only), open UDP mid-session, migrate to QUIC transparently"
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network:
+      nat_profile: open
+      firewall:
+        allow_only_port: 443
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-migrate-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-migrate-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: send_data, actor: peer_a, params: { channel: test, payload_hex: "6265666f7265" } }
+      # Open UDP mid-session
+      - type: apply_nat
+        actor: peer_a
+        params:
+          firewall: { remove_restrictions: true }
+      - { type: wait, params: { duration_ms: 5000 } }
+      - { type: send_data, actor: peer_a, params: { channel: test, payload_hex: "6166746572" } }
+    expected:
+      - { type: transport_selected, params: { initial_transport: websocket_tls, migrated_transport: quic_v1 } }
+      - { type: message_received, actor: peer_b, params: { channel: test, payload_hex: "6166746572" } }
+      - { type: session_state, actor: peer_a, params: { state: Connected, migration_transparent: true } }
+    timeout_ms: 30000
+    budget_ms: 30000

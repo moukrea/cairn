@@ -1,0 +1,35 @@
+# cairn conformance test scenario schema
+# All scenario YAML files in tests/ subdirectories follow this structure.
+#
+# Fields:
+#   scenario:       Unique scenario identifier (matches filename without extension)
+#   description:    Human-readable description of what this scenario tests
+#   tier:           Required infrastructure tier (0, 1, or 2)
+#   category:       Test category (pairing|session|data|wire|crypto|transport|mesh|forward)
+#   participants:   List of participants in the test
+#     - role:       Role name (initiator, responder, relay, server)
+#       lang:       Language filter (rust|ts|go|py|php) or "any" for pair matrix
+#   network:        Network conditions to apply before the test
+#     nat_profile:  NAT profile for participants (open|full_cone|restricted_cone|symmetric)
+#     netem:        tc/netem parameters
+#       delay_ms:   Latency in milliseconds
+#       jitter_ms:  Jitter in milliseconds
+#       loss_pct:   Packet loss percentage
+#     disconnect:   Timed disconnection parameters
+#       after_ms:   Disconnect after N milliseconds into the test
+#       duration_ms: Duration of disconnection in milliseconds
+#   actions:        Ordered list of actions to perform
+#     - type:       Action type (pair|establish_session|send_data|open_channel|verify_cbor|
+#                   verify_crypto|disconnect|reconnect|apply_nat|send_forward|wait)
+#       actor:      Which participant performs this action (by role name)
+#       params:     Action-specific parameters (varies by type)
+#   expected:       Expected outcomes
+#     - type:       Outcome type (status|message_received|session_state|cbor_match|
+#                   crypto_match|error|transport_selected|route_found)
+#       actor:      Which participant should see this outcome
+#       params:     Outcome-specific parameters
+#   timeout_ms:     Maximum time for the entire scenario (overrides category default)
+#   budget_ms:      Performance budget (from spec section 7.3)
+
+# Example: This file documents the schema. See actual scenarios in subdirectories.
+_schema_version: "1.0"

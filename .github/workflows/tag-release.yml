@@ -1,0 +1,196 @@
+name: Publish Package
+
+on:
+  push:
+    tags:
+      - 'cairn-p2p-rs-[0-9]*'
+      - 'cairn-p2p-ts-[0-9]*'
+      - 'packages/go/cairn-p2p/v[0-9]*'
+      - 'cairn-p2p-py-[0-9]*'
+      - 'cairn-p2p-php-[0-9]*'
+      - 'cairn-relay-[0-9]*'
+      - 'cairn-signal-[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. cairn-p2p-rs-0.2.0)'
+        required: true
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      component: ${{ steps.parse.outputs.component }}
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - id: parse
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "Parsing tag: $TAG"
+
+          if [[ "$TAG" =~ ^cairn-p2p-rs-(.+)$ ]]; then
+            echo "component=cairn-p2p-rs" >> "$GITHUB_OUTPUT"
+            echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" =~ ^cairn-p2p-ts-(.+)$ ]]; then
+            echo "component=cairn-p2p-ts" >> "$GITHUB_OUTPUT"
+            echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" =~ ^packages/go/cairn-p2p/v(.+)$ ]]; then
+            echo "component=cairn-p2p-go" >> "$GITHUB_OUTPUT"
+            echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" =~ ^cairn-p2p-py-(.+)$ ]]; then
+            echo "component=cairn-p2p-py" >> "$GITHUB_OUTPUT"
+            echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" =~ ^cairn-p2p-php-(.+)$ ]]; then
+            echo "component=cairn-p2p-php" >> "$GITHUB_OUTPUT"
+            echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" =~ ^cairn-relay-(.+)$ ]]; then
+            echo "component=cairn-relay" >> "$GITHUB_OUTPUT"
+            echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" =~ ^cairn-signal-(.+)$ ]]; then
+            echo "component=cairn-signal" >> "$GITHUB_OUTPUT"
+            echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unknown tag format: $TAG"
+            exit 1
+          fi
+
+  publish-rust:
+    needs: detect
+    if: needs.detect.outputs.component == 'cairn-p2p-rs'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Publish to crates.io
+        run: cargo publish -p cairn-p2p
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+  publish-ts:
+    needs: detect
+    if: needs.detect.outputs.component == 'cairn-p2p-ts'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/ts/cairn-p2p
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-go:
+    needs: detect
+    if: needs.detect.outputs.component == 'cairn-p2p-go'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/go/cairn-p2p/go.mod
+      - name: Verify build
+        working-directory: packages/go/cairn-p2p
+        run: go build ./...
+
+  publish-py:
+    needs: detect
+    if: needs.detect.outputs.component == 'cairn-p2p-py'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install build tools
+        run: pip install build
+        working-directory: packages/py/cairn-p2p
+      - name: Build
+        run: python -m build
+        working-directory: packages/py/cairn-p2p
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/py/cairn-p2p/dist/
+
+  publish-php:
+    needs: detect
+    if: needs.detect.outputs.component == 'cairn-p2p-php'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+      - name: Subtree split and push to mirror repo
+        run: |
+          VERSION="${{ needs.detect.outputs.version }}"
+
+          # Install splitsh-lite
+          curl -L https://github.com/splitsh/lite/releases/download/v1.0.1/lite_linux_amd64.tar.gz | tar xz
+          chmod +x splitsh-lite
+
+          # Split the subtree
+          SHA=$(./splitsh-lite --prefix=packages/php/cairn-p2p)
+
+          # Push to the mirror repo
+          git remote add mirror "https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/moukrea/cairn-p2p.git" 2>/dev/null || true
+          git push mirror "$SHA:refs/heads/main" --force
+          git tag -f "v${VERSION}" "$SHA"
+          git push mirror "v${VERSION}" --force
+
+  publish-relay:
+    needs: detect
+    if: needs.detect.outputs.component == 'cairn-relay'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/relay/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/moukrea/cairn-relay:${{ needs.detect.outputs.version }}
+            ghcr.io/moukrea/cairn-relay:latest
+
+  publish-signal:
+    needs: detect
+    if: needs.detect.outputs.component == 'cairn-signal'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/signaling/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/moukrea/cairn-signal:${{ needs.detect.outputs.version }}
+            ghcr.io/moukrea/cairn-signal:latest

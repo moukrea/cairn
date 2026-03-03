@@ -1,0 +1,46 @@
+# Heartbeat tests — 30s default interval, timeout at 3x interval
+# Validates: state machine transitions Connected->Unstable->Disconnected
+
+scenarios:
+  - scenario: session-heartbeat-normal
+    description: Heartbeat at 30s interval keeps session Connected
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-hb-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-hb-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: wait, params: { duration_ms: 35000 } }
+    expected:
+      - { type: session_state, actor: peer_a, params: { state: Connected } }
+      - { type: session_state, actor: peer_b, params: { state: Connected } }
+      - { type: status, params: { heartbeats_exchanged: true } }
+    timeout_ms: 40000
+    budget_ms: 40000
+
+  - scenario: session-heartbeat-timeout
+    description: Missing heartbeats trigger Disconnected after 3x interval (90s)
+    tier: 0
+    category: session
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-hb-timeout-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-hb-timeout-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      # Block heartbeats via high latency
+      - type: apply_nat
+        actor: peer_a
+        params:
+          netem: { delay_ms: 100000 }
+      - { type: wait, params: { duration_ms: 95000 } }
+    expected:
+      - { type: session_state, actor: peer_b, params: { state: Disconnected } }
+    timeout_ms: 100000
+    budget_ms: 100000

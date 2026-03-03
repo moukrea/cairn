@@ -1,0 +1,135 @@
+# Cross-implementation CBOR decode tests
+# Implementation A encodes -> B/C/D/E decode and verify field equality
+# Catches: map key ordering, integer width selection, optional field presence
+
+scenarios:
+  - scenario: wire-cross-decode-rust-to-all
+    description: Rust encodes envelope, all other implementations decode correctly
+    tier: 0
+    category: wire
+    participants:
+      - { role: encoder, lang: rust }
+      - { role: decoder_ts, lang: ts }
+      - { role: decoder_go, lang: go }
+      - { role: decoder_py, lang: py }
+      - { role: decoder_php, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_cbor
+        actor: encoder
+        params:
+          operation: encode
+          message_type: 0x0300
+          fields: { version: { major: 1, minor: 0 }, payload_hex: "48656c6c6f" }
+      - type: verify_cbor
+        actor: decoder_ts
+        params: { operation: decode, source: encoder }
+      - type: verify_cbor
+        actor: decoder_go
+        params: { operation: decode, source: encoder }
+      - type: verify_cbor
+        actor: decoder_py
+        params: { operation: decode, source: encoder }
+      - type: verify_cbor
+        actor: decoder_php
+        params: { operation: decode, source: encoder }
+    expected:
+      - { type: cbor_match, params: { description: "All decoders extract identical fields from Rust-encoded bytes" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: wire-cross-decode-ts-to-all
+    description: TypeScript encodes envelope, all other implementations decode correctly
+    tier: 0
+    category: wire
+    participants:
+      - { role: encoder, lang: ts }
+      - { role: decoder_rust, lang: rust }
+      - { role: decoder_go, lang: go }
+      - { role: decoder_py, lang: py }
+      - { role: decoder_php, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_cbor
+        actor: encoder
+        params: { operation: encode, message_type: 0x0300, fields: { version: { major: 1, minor: 0 }, payload_hex: "48656c6c6f" } }
+      - { type: verify_cbor, actor: decoder_rust, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_go, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_py, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_php, params: { operation: decode, source: encoder } }
+    expected:
+      - { type: cbor_match, params: { description: "All decoders extract identical fields from TS-encoded bytes" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: wire-cross-decode-go-to-all
+    description: Go encodes envelope, all other implementations decode correctly
+    tier: 0
+    category: wire
+    participants:
+      - { role: encoder, lang: go }
+      - { role: decoder_rust, lang: rust }
+      - { role: decoder_ts, lang: ts }
+      - { role: decoder_py, lang: py }
+      - { role: decoder_php, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_cbor
+        actor: encoder
+        params: { operation: encode, message_type: 0x0300, fields: { version: { major: 1, minor: 0 }, payload_hex: "48656c6c6f" } }
+      - { type: verify_cbor, actor: decoder_rust, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_ts, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_py, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_php, params: { operation: decode, source: encoder } }
+    expected:
+      - { type: cbor_match, params: { description: "All decoders extract identical fields from Go-encoded bytes" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: wire-cross-decode-py-to-all
+    description: Python encodes envelope, all other implementations decode correctly
+    tier: 0
+    category: wire
+    participants:
+      - { role: encoder, lang: py }
+      - { role: decoder_rust, lang: rust }
+      - { role: decoder_ts, lang: ts }
+      - { role: decoder_go, lang: go }
+      - { role: decoder_php, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_cbor
+        actor: encoder
+        params: { operation: encode, message_type: 0x0300, fields: { version: { major: 1, minor: 0 }, payload_hex: "48656c6c6f" } }
+      - { type: verify_cbor, actor: decoder_rust, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_ts, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_go, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_php, params: { operation: decode, source: encoder } }
+    expected:
+      - { type: cbor_match, params: { description: "All decoders extract identical fields from Python-encoded bytes" } }
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: wire-cross-decode-php-to-all
+    description: PHP encodes envelope, all other implementations decode correctly
+    tier: 0
+    category: wire
+    participants:
+      - { role: encoder, lang: php }
+      - { role: decoder_rust, lang: rust }
+      - { role: decoder_ts, lang: ts }
+      - { role: decoder_go, lang: go }
+      - { role: decoder_py, lang: py }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_cbor
+        actor: encoder
+        params: { operation: encode, message_type: 0x0300, fields: { version: { major: 1, minor: 0 }, payload_hex: "48656c6c6f" } }
+      - { type: verify_cbor, actor: decoder_rust, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_ts, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_go, params: { operation: decode, source: encoder } }
+      - { type: verify_cbor, actor: decoder_py, params: { operation: decode, source: encoder } }
+    expected:
+      - { type: cbor_match, params: { description: "All decoders extract identical fields from PHP-encoded bytes" } }
+    timeout_ms: 2000
+    budget_ms: 2000

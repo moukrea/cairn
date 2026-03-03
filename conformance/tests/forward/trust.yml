@@ -1,0 +1,54 @@
+# Store-and-forward trust enforcement tests
+# Server rejects ForwardRequest from unpaired sender or for unpaired recipient
+
+scenarios:
+  - scenario: forward-trust-unpaired-sender
+    description: Server rejects ForwardRequest from unpaired sender
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: any }
+      - { role: server, lang: rust }
+    network: { nat_profile: open }
+    actions:
+      # Sender does NOT pair with server
+      - type: send_forward
+        actor: sender
+        params:
+          destination: some-peer
+          via: server
+          payload_hex: "756e706169726564"
+    expected:
+      - type: error
+        actor: sender
+        params:
+          error_type: AuthenticationFailed
+          description: "Server rejects ForwardRequest from unpaired sender"
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: forward-trust-unpaired-recipient
+    description: Server rejects ForwardRequest for unpaired recipient
+    tier: 2
+    category: forward
+    participants:
+      - { role: sender, lang: any }
+      - { role: server, lang: rust }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: sender, params: { mechanism: psk, flow: initiation, psk: "test-fwd-trust-psk" } }
+      - { type: pair, actor: server, params: { mechanism: psk, flow: initiation, psk: "test-fwd-trust-psk" } }
+      - type: send_forward
+        actor: sender
+        params:
+          destination: unpaired-recipient
+          via: server
+          payload_hex: "756e706169726564207265636970"
+    expected:
+      - type: error
+        actor: server
+        params:
+          error_type: AuthenticationFailed
+          description: "Server rejects forward to unpaired recipient"
+    timeout_ms: 30000
+    budget_ms: 30000

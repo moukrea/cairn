@@ -1,0 +1,74 @@
+{
+  "description": "SPAKE2 test vectors for cairn pairing. SPAKE2 uses random ephemerals so byte-level output is non-deterministic; vectors test protocol parameters, properties, and deterministic key derivation steps.",
+  "vectors": [
+    {
+      "description": "SPAKE2 protocol parameters for cairn pairing (Ed25519Group)",
+      "expected_output": {
+        "pake_message_size": 33,
+        "shared_secret_size": 32
+      },
+      "id": "spake2-protocol-params",
+      "input": {
+        "group": "Ed25519Group",
+        "initiator_identity": "cairn-initiator",
+        "key_confirmation_info": "cairn-pairing-key-confirm-v1",
+        "responder_identity": "cairn-responder",
+        "session_key_derivation_info": "cairn-pairing-session-key-v1"
+      }
+    },
+    {
+      "description": "SPAKE2: same password on both sides produces matching shared secrets",
+      "expected_output": {
+        "keys_match": true,
+        "note": "Both parties using the same password must derive identical shared secrets"
+      },
+      "id": "spake2-same-password-match",
+      "input": {
+        "initiator_identity": "cairn-initiator",
+        "password": "test-password-123",
+        "responder_identity": "cairn-responder"
+      }
+    },
+    {
+      "description": "SPAKE2: different passwords produce mismatched shared secrets",
+      "expected_output": {
+        "keys_match": false,
+        "note": "Different passwords produce different shared secrets (PAKE failure detectable via key confirmation)"
+      },
+      "id": "spake2-different-password-mismatch",
+      "input": {
+        "initiator_identity": "cairn-initiator",
+        "password_a": "correct-password",
+        "password_b": "wrong-password",
+        "responder_identity": "cairn-responder"
+      }
+    },
+    {
+      "description": "Key confirmation HMAC derivation from known shared key",
+      "expected_output": {
+        "confirm_key_hex": "2437944eab64b00c55edb69214c93041d3f0d5c16f9253bc4c0ebb494c7617d7",
+        "initiator_confirmation_hex": "b97745ac54d084c5bdd5915d5699176dfe57230d1beacda4e67c119ddca572b5",
+        "responder_confirmation_hex": "ef98542b56e2a0c40094acd98bf7e3fb220ca046d364039e9fd7fc676cc1a627"
+      },
+      "id": "spake2-key-confirmation",
+      "input": {
+        "confirm_hkdf_info": "cairn-pairing-key-confirm-v1",
+        "initiator_label": "initiator",
+        "responder_label": "responder",
+        "shared_key_hex": "4242424242424242424242424242424242424242424242424242424242424242"
+      }
+    },
+    {
+      "description": "Session key derived from SPAKE2 raw output via HKDF-SHA256",
+      "expected_output": {
+        "session_key_hex": "b4ae3b4d9eacd5f2f2c5de0e64cc0938dc09b8467553384e2241bcd020b51fb4"
+      },
+      "id": "spake2-session-key-derivation",
+      "input": {
+        "hkdf_info": "cairn-pairing-session-key-v1",
+        "raw_spake2_output_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "salt_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  ]
+}

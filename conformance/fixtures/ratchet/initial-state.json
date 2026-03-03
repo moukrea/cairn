@@ -1,0 +1,23 @@
+{
+  "description": "Initial Double Ratchet state fixtures for conformance testing. These represent the ratchet state immediately after initialization from a known shared secret.",
+  "initiator_state": {
+    "shared_secret_hex": "4242424242424242424242424242424242424242424242424242424242424242",
+    "role": "initiator",
+    "msg_num_send": 0,
+    "msg_num_recv": 0,
+    "prev_chain_len": 0,
+    "max_skip": 100,
+    "default_cipher": "AES-256-GCM",
+    "note": "Initiator calls init_initiator(shared_secret, remote_public). The DH ratchet keypair and remote public key are random per session."
+  },
+  "responder_state": {
+    "shared_secret_hex": "4242424242424242424242424242424242424242424242424242424242424242",
+    "role": "responder",
+    "msg_num_send": 0,
+    "msg_num_recv": 0,
+    "prev_chain_len": 0,
+    "max_skip": 100,
+    "default_cipher": "AES-256-GCM",
+    "note": "Responder calls init_responder(shared_secret, dh_keypair). The root_key equals shared_secret. No sending chain key until first DH ratchet."
+  }
+}

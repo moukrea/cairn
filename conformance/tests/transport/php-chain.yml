@@ -1,0 +1,25 @@
+# PHP-specific transport chain test — no QUIC, no WebTransport
+# PHP starts at priority 2/3 (STUN UDP or TCP)
+
+scenarios:
+  - scenario: transport-php-chain
+    description: "PHP peer skips QUIC/WebTransport, starts at priority 2 or 3"
+    tier: 1
+    category: transport
+    participants:
+      - { role: php_peer, lang: php }
+      - { role: other_peer, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: php_peer, params: { mechanism: psk, flow: initiation, psk: "test-php-chain-psk" } }
+      - { type: pair, actor: other_peer, params: { mechanism: psk, flow: initiation, psk: "test-php-chain-psk" } }
+      - { type: establish_session, actor: php_peer, params: {} }
+    expected:
+      - type: transport_selected
+        actor: php_peer
+        params:
+          transport_not: [quic_v1, webtransport]
+          priority_min: 2
+          description: "PHP peer selects from priority 2+ (no QUIC/WebTransport)"
+    timeout_ms: 30000
+    budget_ms: 10000

@@ -1,0 +1,49 @@
+target/
+
+# Dependencies
+node_modules/
+vendor/
+.venv/
+composer.lock
+
+# Build artifacts
+dist/
+
+# Caches
+__pycache__/
+.phpunit.cache/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+coverage/
+htmlcov/
+*.lcov
+.nyc_output/
+
+# PHP
+.phpunit.result.cache
+composer.phar
+
+# Python
+*.egg-info/
+*.egg
+.eggs/
+
+# Go
+*.test
+cairn-conformance-runner-go
+
+# Environment / secrets
+.env
+.env.*

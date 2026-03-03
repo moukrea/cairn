@@ -1,0 +1,56 @@
+# CBOR wire protocol encode/decode round-trip tests
+# Validates: every implementation produces correct CBOR for all message types,
+# and decodes known-good byte sequences correctly
+
+scenarios:
+  - scenario: wire-envelope-roundtrip
+    description: Envelope CBOR encode/decode round-trip for all fields
+    tier: 0
+    category: wire
+    participants:
+      - { role: encoder, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_cbor
+        actor: encoder
+        params:
+          operation: roundtrip
+          message_types:
+            - 0x0100  # Handshake
+            - 0x0200  # Pairing
+            - 0x0300  # Data
+            - 0x0400  # Session
+            - 0x0500  # Discovery
+            - 0x0600  # Mesh
+            - 0x0700  # Forward
+    expected:
+      - type: cbor_match
+        params:
+          description: "All message type envelopes encode/decode correctly"
+          fields_verified: [version, type, msg_id, session_id, payload, auth_tag]
+    timeout_ms: 2000
+    budget_ms: 2000
+
+  - scenario: wire-envelope-fields
+    description: Verify envelope integer keys and CBOR major types
+    tier: 0
+    category: wire
+    participants:
+      - { role: impl, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - type: verify_cbor
+        actor: impl
+        params:
+          operation: field_types
+          expected_keys:
+            0: { name: version, major_type: 0, description: "uint8" }
+            1: { name: type, major_type: 0, description: "uint16" }
+            2: { name: msg_id, major_type: 2, description: "byte string, 16 bytes (UUID v7)" }
+            3: { name: session_id, major_type: 2, description: "byte string, 32 bytes (or absent)" }
+            4: { name: payload, major_type: 2, description: "CBOR-encoded, type-specific" }
+            5: { name: auth_tag, major_type: 2, description: "byte string (or absent)" }
+    expected:
+      - { type: cbor_match, params: { description: "All keys use correct CBOR major types" } }
+    timeout_ms: 2000
+    budget_ms: 2000

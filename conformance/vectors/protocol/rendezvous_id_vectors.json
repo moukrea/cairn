@@ -1,0 +1,79 @@
+{
+  "description": "Rendezvous ID derivation test vectors. Rendezvous IDs use HKDF-SHA256 with shared secret as IKM, epoch timestamp (floored to 24h boundary, big-endian u64) as salt, and 'cairn-rendezvous-id-v1' as info.",
+  "vectors": [
+    {
+      "description": "Rendezvous ID derived from known shared secret and epoch (floored to 24h boundary)",
+      "expected_output": {
+        "rendezvous_id_hex": "b75787fb9423120d3dd1da4cc751f74c31779de1426b2ee7ed2172769205b150",
+        "salt_hex": "000000006552b880"
+      },
+      "id": "rendezvous-known-epoch",
+      "input": {
+        "day_seconds": 86400,
+        "epoch_timestamp": 1700000000,
+        "floored_epoch": 1699920000,
+        "info": "cairn-rendezvous-id-v1",
+        "shared_secret_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+      }
+    },
+    {
+      "description": "Rotation: IDs from adjacent 24h periods must be different",
+      "expected_output": {
+        "current_rendezvous_id_hex": "b75787fb9423120d3dd1da4cc751f74c31779de1426b2ee7ed2172769205b150",
+        "ids_are_different": true,
+        "next_rendezvous_id_hex": "c593c17d9bd774961bfc2851acdef599a857ccc9a34ee80416dfcbdf73b82ad5"
+      },
+      "id": "rendezvous-rotation-boundary",
+      "input": {
+        "current_epoch_floored": 1699920000,
+        "next_epoch_floored": 1700006400,
+        "shared_secret_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+      }
+    },
+    {
+      "description": "During 1h overlap window after rotation, both current and previous rendezvous IDs are valid",
+      "expected_output": {
+        "both_valid_during_overlap": true,
+        "current_rendezvous_id_hex": "c593c17d9bd774961bfc2851acdef599a857ccc9a34ee80416dfcbdf73b82ad5",
+        "previous_rendezvous_id_hex": "b75787fb9423120d3dd1da4cc751f74c31779de1426b2ee7ed2172769205b150"
+      },
+      "id": "rendezvous-overlap-window",
+      "input": {
+        "current_period_start": 1700006400,
+        "overlap_duration_seconds": 3600,
+        "previous_period_start": 1699920000,
+        "shared_secret_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "timestamp": 1700008200
+      }
+    },
+    {
+      "description": "Clock tolerance: peers within 5 minutes of rotation boundary should try both period IDs",
+      "expected_output": {
+        "note": "Peers with clocks within 5-minute tolerance of the rotation boundary should check both current and previous rendezvous IDs",
+        "tolerance_window": "300 seconds"
+      },
+      "id": "rendezvous-clock-tolerance",
+      "input": {
+        "after_boundary_timestamp": 1700006520,
+        "clock_tolerance_seconds": 300,
+        "near_boundary_timestamp": 1700006280,
+        "period_boundary": 1700006400,
+        "shared_secret_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+      }
+    },
+    {
+      "description": "Different shared secrets produce different rendezvous IDs for the same epoch",
+      "expected_output": {
+        "ids_are_different": true,
+        "rendezvous_id_1_hex": "b75787fb9423120d3dd1da4cc751f74c31779de1426b2ee7ed2172769205b150",
+        "rendezvous_id_2_hex": "089df21683770110c64030940f50fcb3140760d6d546f2d71fde5fb5ea6d2759"
+      },
+      "id": "rendezvous-different-secrets",
+      "input": {
+        "epoch_floored": 1699920000,
+        "shared_secret_1_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+        "shared_secret_2_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      }
+    }
+  ]
+}

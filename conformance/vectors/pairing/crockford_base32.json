@@ -1,0 +1,253 @@
+{
+  "description": "Crockford Base32 encoding test vectors for cairn PIN code system.",
+  "vectors": [
+    {
+      "description": "Complete Crockford Base32 alphabet (excludes I, L, O, U)",
+      "expected_output": {
+        "alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ",
+        "size": 32
+      },
+      "id": "crockford-alphabet",
+      "input": {}
+    },
+    {
+      "description": "Crockford Base32 encode/decode roundtrip: all zeros",
+      "expected_output": {
+        "encoded": "00000000"
+      },
+      "id": "crockford-roundtrip-all-zeros",
+      "input": {
+        "bytes_hex": "0000000000"
+      }
+    },
+    {
+      "description": "Crockford Base32 encode/decode roundtrip: all ones",
+      "expected_output": {
+        "encoded": "ZZZZZZZZ"
+      },
+      "id": "crockford-roundtrip-all-ones",
+      "input": {
+        "bytes_hex": "ffffffffff"
+      }
+    },
+    {
+      "description": "Crockford Base32 encode/decode roundtrip: sequential",
+      "expected_output": {
+        "encoded": "04HMASW9"
+      },
+      "id": "crockford-roundtrip-sequential",
+      "input": {
+        "bytes_hex": "0123456789"
+      }
+    },
+    {
+      "description": "Crockford Base32 encode/decode roundtrip: power-of-two bits",
+      "expected_output": {
+        "encoded": "G1020408"
+      },
+      "id": "crockford-roundtrip-power-of-two-bits",
+      "input": {
+        "bytes_hex": "8040201008"
+      }
+    },
+    {
+      "description": "Crockford Base32 is case-insensitive: lowercase and uppercase represent same value",
+      "expected_output": {
+        "equivalent": true
+      },
+      "id": "crockford-case-insensitive",
+      "input": {
+        "lowercase": "abcdefgh",
+        "uppercase": "ABCDEFGH"
+      }
+    },
+    {
+      "description": "Crockford Base32 ambiguous character normalization: i/I/l/L -> 1, o/O -> 0",
+      "expected_output": {
+        "normalized": true
+      },
+      "id": "crockford-ambiguous-chars",
+      "input": {
+        "substitutions": [
+          {
+            "from": "i",
+            "to": "1"
+          },
+          {
+            "from": "I",
+            "to": "1"
+          },
+          {
+            "from": "l",
+            "to": "1"
+          },
+          {
+            "from": "L",
+            "to": "1"
+          },
+          {
+            "from": "o",
+            "to": "0"
+          },
+          {
+            "from": "O",
+            "to": "0"
+          }
+        ]
+      }
+    },
+    {
+      "description": "Characters I, L, O, U are excluded from the Crockford Base32 encoding alphabet",
+      "expected_output": {
+        "valid": false
+      },
+      "id": "crockford-excluded-chars",
+      "input": {
+        "excluded_from_alphabet": [
+          "I",
+          "L",
+          "O",
+          "U"
+        ],
+        "reason": "I/L confused with 1, O confused with 0, U excluded for profanity avoidance"
+      }
+    },
+    {
+      "description": "Complete value-to-character mapping for all 32 Crockford Base32 symbols",
+      "expected_output": {
+        "mapping": [
+          {
+            "character": "0",
+            "value": 0
+          },
+          {
+            "character": "1",
+            "value": 1
+          },
+          {
+            "character": "2",
+            "value": 2
+          },
+          {
+            "character": "3",
+            "value": 3
+          },
+          {
+            "character": "4",
+            "value": 4
+          },
+          {
+            "character": "5",
+            "value": 5
+          },
+          {
+            "character": "6",
+            "value": 6
+          },
+          {
+            "character": "7",
+            "value": 7
+          },
+          {
+            "character": "8",
+            "value": 8
+          },
+          {
+            "character": "9",
+            "value": 9
+          },
+          {
+            "character": "A",
+            "value": 10
+          },
+          {
+            "character": "B",
+            "value": 11
+          },
+          {
+            "character": "C",
+            "value": 12
+          },
+          {
+            "character": "D",
+            "value": 13
+          },
+          {
+            "character": "E",
+            "value": 14
+          },
+          {
+            "character": "F",
+            "value": 15
+          },
+          {
+            "character": "G",
+            "value": 16
+          },
+          {
+            "character": "H",
+            "value": 17
+          },
+          {
+            "character": "J",
+            "value": 18
+          },
+          {
+            "character": "K",
+            "value": 19
+          },
+          {
+            "character": "M",
+            "value": 20
+          },
+          {
+            "character": "N",
+            "value": 21
+          },
+          {
+            "character": "P",
+            "value": 22
+          },
+          {
+            "character": "Q",
+            "value": 23
+          },
+          {
+            "character": "R",
+            "value": 24
+          },
+          {
+            "character": "S",
+            "value": 25
+          },
+          {
+            "character": "T",
+            "value": 26
+          },
+          {
+            "character": "V",
+            "value": 27
+          },
+          {
+            "character": "W",
+            "value": 28
+          },
+          {
+            "character": "X",
+            "value": 29
+          },
+          {
+            "character": "Y",
+            "value": 30
+          },
+          {
+            "character": "Z",
+            "value": 31
+          }
+        ]
+      },
+      "id": "crockford-value-mapping",
+      "input": {}
+    }
+  ]
+}

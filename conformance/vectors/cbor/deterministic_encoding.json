@@ -1,0 +1,111 @@
+{
+  "description": "Deterministic CBOR encoding test vectors (RFC 8949 section 4.2). Verifies key ordering, shortest-form encoding, and re-encode stability.",
+  "vectors": [
+    {
+      "description": "Full envelope: keys must appear in ascending order 0,1,2,3,4,5",
+      "expected_output": {
+        "cbor_hex": "a600010119040002500193a54d000070008000000000000001035820abababababababababababababababababababababababababababababababab0441ff05420001",
+        "encode_equals_encode_deterministic": true,
+        "key_order": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "id": "deterministic-key-order",
+      "input": {
+        "auth_tag_hex": "0001",
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0400",
+        "payload_hex": "ff",
+        "session_id_hex": "abababababababababababababababababababababababababababababababab",
+        "version": 1
+      }
+    },
+    {
+      "description": "version=1 must use 1-byte CBOR encoding (0x01), msg_type=1 must use 1-byte (0x01)",
+      "expected_output": {
+        "cbor_hex": "a40001010102500193a54d0000700080000000000000010440"
+      },
+      "id": "deterministic-shortest-int-small",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0001",
+        "payload_hex": "",
+        "session_id_hex": null,
+        "version": 1
+      }
+    },
+    {
+      "description": "msg_type=0x0703 must use 2-byte CBOR encoding (0x19 0x0703)",
+      "expected_output": {
+        "cbor_hex": "a400010119070302500193a54d0000700080000000000000010440"
+      },
+      "id": "deterministic-shortest-int-u16",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0703",
+        "payload_hex": "",
+        "session_id_hex": null,
+        "version": 1
+      }
+    },
+    {
+      "description": "Encoding the same envelope twice must produce byte-identical CBOR",
+      "expected_output": {
+        "cbor_hex": "a600010119030002500193a54d000070008000000000000001035820abababababababababababababababababababababababababababababababab0442dead0542beef",
+        "re_encode_identical": true
+      },
+      "id": "deterministic-re-encode-identical",
+      "input": {
+        "auth_tag_hex": "beef",
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0300",
+        "payload_hex": "dead",
+        "session_id_hex": "abababababababababababababababababababababababababababababababab",
+        "version": 1
+      }
+    },
+    {
+      "description": "Minimal envelope with 4 keys (0,1,2,4) — absent keys 3,5 must not appear",
+      "expected_output": {
+        "cbor_hex": "a400010119040002500193a54d0000700080000000000000010440",
+        "key_order": [
+          0,
+          1,
+          2,
+          4
+        ]
+      },
+      "id": "deterministic-minimal-4-keys",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0400",
+        "payload_hex": "",
+        "session_id_hex": null,
+        "version": 1
+      }
+    },
+    {
+      "description": "1-byte payload must use shortest byte string encoding (0x41 0x42)",
+      "expected_output": {
+        "cbor_hex": "a400010119040002500193a54d000070008000000000000001044142"
+      },
+      "id": "deterministic-shortest-bstr",
+      "input": {
+        "auth_tag_hex": null,
+        "msg_id_hex": "0193a54d000070008000000000000001",
+        "msg_type": "0x0400",
+        "payload_hex": "42",
+        "session_id_hex": null,
+        "version": 1
+      }
+    }
+  ]
+}

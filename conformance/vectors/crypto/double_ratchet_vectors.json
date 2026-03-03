@@ -1,0 +1,179 @@
+{
+  "description": "Double Ratchet test vectors for cairn session encryption. Covers KDF chain operations (kdf_rk, kdf_ck), nonce derivation, and protocol properties.",
+  "vectors": [
+    {
+      "description": "Root chain KDF: derive new root key and chain key from DH output",
+      "expected_output": {
+        "new_chain_key_hex": "b878fa9f8ef540631795c97c22931e9a5c003656cb9ebdc5470fd518a94a1ea3",
+        "new_root_key_hex": "6444b220e44a57d6dcf516b7c0178b96cb9e07fb5549632d8098309506e64de9"
+      },
+      "id": "ratchet-kdf-rk-1",
+      "input": {
+        "dh_output_hex": "0202020202020202020202020202020202020202020202020202020202020202",
+        "hkdf_info": "cairn-root-chain-v1",
+        "root_key_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+      }
+    },
+    {
+      "description": "Root chain KDF: second test with different inputs",
+      "expected_output": {
+        "new_chain_key_hex": "ada47893ebdc857639bf195a57e277d7803dcf4582531131d8e3b5eb83617716",
+        "new_root_key_hex": "d7d600872bd1aa48fb2e4ee8ed540aedfc6e4974f5f5f34b1e1f01b4eabf9b52"
+      },
+      "id": "ratchet-kdf-rk-2",
+      "input": {
+        "dh_output_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "hkdf_info": "cairn-root-chain-v1",
+        "root_key_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "description": "Chain KDF step 0: derive new chain key and message key from initial chain key",
+      "expected_output": {
+        "message_key_hex": "90a072e2766443e80e9239da178f978f5f6fa0f42819855d17f63ed3e7bbd0f3",
+        "new_chain_key_hex": "ef2605a710bf1b72d47d374bcccb827aa9afa6f71ed6c64adbc076a3a5260045"
+      },
+      "id": "ratchet-kdf-ck-step0",
+      "input": {
+        "chain_advance_info": "cairn-chain-advance-v1",
+        "chain_key_hex": "0303030303030303030303030303030303030303030303030303030303030303",
+        "msg_encrypt_info": "cairn-msg-encrypt-v1"
+      }
+    },
+    {
+      "description": "Send chain progression: 3 consecutive messages showing chain key and message key at each step",
+      "expected_output": {
+        "steps": [
+          {
+            "input_chain_key_hex": "0303030303030303030303030303030303030303030303030303030303030303",
+            "message_key_hex": "90a072e2766443e80e9239da178f978f5f6fa0f42819855d17f63ed3e7bbd0f3",
+            "output_chain_key_hex": "ef2605a710bf1b72d47d374bcccb827aa9afa6f71ed6c64adbc076a3a5260045",
+            "step": 0
+          },
+          {
+            "input_chain_key_hex": "ef2605a710bf1b72d47d374bcccb827aa9afa6f71ed6c64adbc076a3a5260045",
+            "message_key_hex": "fb9f8eac692cdfc1c0260471660274dd8f42dfdf22a947ad7f16ca561fc64230",
+            "output_chain_key_hex": "77469ba46843df45cdba46761ab5c9a3994dffaffc5d027b2b295b9720c10ee3",
+            "step": 1
+          },
+          {
+            "input_chain_key_hex": "77469ba46843df45cdba46761ab5c9a3994dffaffc5d027b2b295b9720c10ee3",
+            "message_key_hex": "2c90f26fa5d3979c09aba523d1ec9601ddd2e31a7cd779ab680b3845887f8c2b",
+            "output_chain_key_hex": "0308a483d09068e2835ab98c817eb42196eaebbc77dd613d653272db71233989",
+            "step": 2
+          }
+        ]
+      },
+      "id": "ratchet-send-chain-3-messages",
+      "input": {
+        "initial_chain_key_hex": "0303030303030303030303030303030303030303030303030303030303030303",
+        "num_messages": 3
+      }
+    },
+    {
+      "description": "Nonce derivation for message number 0: first 8 bytes from message key, last 4 from big-endian msg_num",
+      "expected_output": {
+        "nonce_hex": "555555555555555500000000"
+      },
+      "id": "ratchet-nonce-msg0",
+      "input": {
+        "message_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+        "msg_num": 0
+      }
+    },
+    {
+      "description": "Nonce derivation for message number 1: first 8 bytes from message key, last 4 from big-endian msg_num",
+      "expected_output": {
+        "nonce_hex": "555555555555555500000001"
+      },
+      "id": "ratchet-nonce-msg1",
+      "input": {
+        "message_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+        "msg_num": 1
+      }
+    },
+    {
+      "description": "Nonce derivation for message number 2: first 8 bytes from message key, last 4 from big-endian msg_num",
+      "expected_output": {
+        "nonce_hex": "555555555555555500000002"
+      },
+      "id": "ratchet-nonce-msg2",
+      "input": {
+        "message_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+        "msg_num": 2
+      }
+    },
+    {
+      "description": "Nonce derivation for message number 100: first 8 bytes from message key, last 4 from big-endian msg_num",
+      "expected_output": {
+        "nonce_hex": "555555555555555500000064"
+      },
+      "id": "ratchet-nonce-msg100",
+      "input": {
+        "message_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+        "msg_num": 100
+      }
+    },
+    {
+      "description": "Nonce derivation for message number 4294967295: first 8 bytes from message key, last 4 from big-endian msg_num",
+      "expected_output": {
+        "nonce_hex": "5555555555555555ffffffff"
+      },
+      "id": "ratchet-nonce-msg4294967295",
+      "input": {
+        "message_key_hex": "5555555555555555555555555555555555555555555555555555555555555555",
+        "msg_num": 4294967295
+      }
+    },
+    {
+      "description": "Double Ratchet default configuration values",
+      "expected_output": {
+        "default_cipher": "AES-256-GCM",
+        "max_skip": 100,
+        "supported_ciphers": [
+          "AES-256-GCM",
+          "ChaCha20-Poly1305"
+        ]
+      },
+      "id": "ratchet-config-defaults",
+      "input": {}
+    },
+    {
+      "description": "Double Ratchet message header structure",
+      "expected_output": {
+        "fields": [
+          "dh_public (32 bytes)",
+          "prev_chain_len (u32)",
+          "msg_num (u32)"
+        ],
+        "note": "Header is sent alongside each encrypted message and used as AEAD associated data"
+      },
+      "id": "ratchet-header-format",
+      "input": {
+        "dh_public_hex": "4242424242424242424242424242424242424242424242424242424242424242",
+        "msg_num": 3,
+        "prev_chain_len": 5
+      }
+    },
+    {
+      "description": "Double Ratchet must support out-of-order message delivery via skipped key caching",
+      "expected_output": {
+        "all_decrypted_successfully": true,
+        "note": "Skipped message keys are cached (up to max_skip) for out-of-order delivery"
+      },
+      "id": "ratchet-out-of-order-properties",
+      "input": {
+        "delivery_order": [
+          2,
+          0,
+          1
+        ],
+        "messages_sent": [
+          "msg0",
+          "msg1",
+          "msg2"
+        ]
+      }
+    }
+  ]
+}

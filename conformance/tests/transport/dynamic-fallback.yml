@@ -1,0 +1,108 @@
+# Dynamic transport fallback tests — mid-session transport failure and recovery
+# Validates: QUIC->TCP fallback, direct->TURN fallback, proactive migration
+
+scenarios:
+  - scenario: transport-fallback-quic-to-tcp
+    description: QUIC transport disrupted mid-session falls back to TCP
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: rust }
+      - { role: peer_b, lang: ts }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-fallback-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-fallback-psk" } }
+      - { type: establish_session, params: { transport: quic } }
+      - { type: send_data, actor: peer_a, params: { payload_hex: "6265666f726520666169" } }
+      # Simulate UDP failure (QUIC uses UDP)
+      - { type: apply_nat, actor: peer_a, params: { profile: block_udp } }
+      - { type: wait, params: { duration_ms: 5000 } }
+      # Verify fallback to TCP
+      - { type: send_data, actor: peer_a, params: { payload_hex: "6166746572206661696c" } }
+    expected:
+      - { type: message_received, actor: peer_b, params: { payload_hex: "6265666f726520666169" } }
+      - { type: message_received, actor: peer_b, params: { payload_hex: "6166746572206661696c" } }
+      - { type: status, actor: peer_a, params: { transport: tcp, description: "Fell back from QUIC to TCP" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: transport-fallback-direct-to-turn
+    description: Direct transport fails and falls back to TURN relay
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: rust }
+      - { role: peer_b, lang: go }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-turn-fallback-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-turn-fallback-psk" } }
+      - { type: establish_session, params: { transport: tcp } }
+      - { type: send_data, actor: peer_a, params: { payload_hex: "646972656374" } }
+      # Simulate full network partition then reconnect with symmetric NAT
+      - { type: disconnect, actor: peer_a }
+      - { type: wait, params: { duration_ms: 2000 } }
+      - { type: apply_nat, actor: peer_a, params: { profile: symmetric } }
+      - { type: apply_nat, actor: peer_b, params: { profile: symmetric } }
+      - { type: reconnect, actor: peer_a }
+      - { type: wait, params: { duration_ms: 5000 } }
+      - { type: send_data, actor: peer_a, params: { payload_hex: "7475726e2072656c6179" } }
+    expected:
+      - { type: message_received, actor: peer_b, params: { payload_hex: "646972656374" } }
+      - { type: message_received, actor: peer_b, params: { payload_hex: "7475726e2072656c6179" } }
+      - { type: status, actor: peer_a, params: { transport: turn, description: "Fell back to TURN relay" } }
+      - { type: message_sent, actor: peer_a, params: { msg_type: "0x0402", description: "TRANSPORT_MIGRATE sent" } }
+      - { type: message_received, actor: peer_a, params: { msg_type: "0x0403", description: "TRANSPORT_MIGRATE_ACK received" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: transport-migration-turn-to-quic
+    description: Proactive migration from TURN to QUIC when NAT opens
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: ts }
+      - { role: peer_b, lang: py }
+    network: { nat_profile: symmetric }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-migrate-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-migrate-psk" } }
+      - { type: establish_session, params: { transport: turn_udp } }
+      - { type: send_data, actor: peer_a, params: { payload_hex: "7475726e2066697273" } }
+      # Open NAT for both peers — should trigger proactive migration to QUIC
+      - { type: apply_nat, actor: peer_a, params: { profile: open } }
+      - { type: apply_nat, actor: peer_b, params: { profile: open } }
+      - { type: wait, params: { duration_ms: 5000 } }
+      - { type: send_data, actor: peer_a, params: { payload_hex: "71756963206e6f77" } }
+    expected:
+      - { type: message_received, actor: peer_b, params: { payload_hex: "7475726e2066697273" } }
+      - { type: message_received, actor: peer_b, params: { payload_hex: "71756963206e6f77" } }
+      - { type: status, actor: peer_a, params: { transport: quic, description: "Proactively migrated to QUIC" } }
+      - { type: message_sent, actor: peer_a, params: { msg_type: "0x0402", description: "TRANSPORT_MIGRATE sent" } }
+      - { type: message_received, actor: peer_a, params: { msg_type: "0x0403", description: "TRANSPORT_MIGRATE_ACK received" } }
+    timeout_ms: 30000
+    budget_ms: 30000
+
+  - scenario: transport-fallback-cross-lang-go-php
+    description: Go-PHP transport fallback under UDP disruption
+    tier: 1
+    category: transport
+    participants:
+      - { role: peer_a, lang: go }
+      - { role: peer_b, lang: php }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-gophp-fallback-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-gophp-fallback-psk" } }
+      - { type: establish_session, params: { transport: quic } }
+      - { type: send_data, actor: peer_a, params: { payload_hex: "676f2d706870" } }
+      - { type: apply_nat, actor: peer_a, params: { profile: block_udp } }
+      - { type: wait, params: { duration_ms: 5000 } }
+      - { type: send_data, actor: peer_a, params: { payload_hex: "66616c6c6261636b" } }
+    expected:
+      - { type: message_received, actor: peer_b, params: { payload_hex: "676f2d706870" } }
+      - { type: message_received, actor: peer_b, params: { payload_hex: "66616c6c6261636b" } }
+      - { type: status, actor: peer_a, params: { transport: tcp, description: "Fell back from QUIC to TCP" } }
+    timeout_ms: 30000
+    budget_ms: 30000

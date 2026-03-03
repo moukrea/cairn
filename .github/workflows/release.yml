@@ -1,0 +1,208 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Skip release commits to avoid infinite loops
+  check-skip:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - id: check
+        run: |
+          if [[ "${{ github.event.head_commit.message }}" == chore\(release\):* ]]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  test-rust:
+    needs: check-skip
+    if: needs.check-skip.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy -p cairn-p2p -- -D warnings
+      - run: cargo test -p cairn-p2p
+
+  test-ts:
+    needs: check-skip
+    if: needs.check-skip.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/ts/cairn-p2p
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: packages/ts/cairn-p2p/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+  test-go:
+    needs: check-skip
+    if: needs.check-skip.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/go/cairn-p2p
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/go/cairn-p2p/go.mod
+          cache-dependency-path: packages/go/cairn-p2p/go.sum
+      - run: go vet ./...
+      - run: go test ./...
+
+  test-py:
+    needs: check-skip
+    if: needs.check-skip.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/py/cairn-p2p
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install ".[dev]"
+      - run: ruff check
+      - run: pytest
+
+  test-php:
+    needs: check-skip
+    if: needs.check-skip.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/php/cairn-p2p
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: gmp, sodium
+          tools: composer
+      - run: composer install --no-interaction --prefer-dist
+      - run: composer lint
+      - run: composer check
+      - run: composer test
+
+  version-bump:
+    needs: [test-rust, test-ts, test-go, test-py, test-php]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump package versions
+        id: bump
+        run: bash .github/scripts/bump-packages.sh
+
+      - name: Commit and push
+        if: steps.bump.outputs.has_bumps == 'true'
+        run: |
+          git add -A
+          git commit -m "${{ steps.bump.outputs.commit_message }}"
+          git push origin main
+
+      - name: Create tags and push
+        if: steps.bump.outputs.has_bumps == 'true'
+        run: |
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            echo "Creating and pushing tag: $tag"
+            git tag "$tag"
+            git push origin "$tag"
+          done <<< "${{ steps.bump.outputs.tags }}"
+
+      - name: Create GitHub releases
+        if: steps.bump.outputs.has_bumps == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          while IFS= read -r entry; do
+            [ -z "$entry" ] && continue
+            IFS=':' read -r name version tag <<< "$entry"
+
+            echo "=== Creating release for $name v$version (tag: $tag) ==="
+
+            # Determine component directory
+            case "$name" in
+              cairn-p2p-rs) DIR="packages/rs/cairn-p2p" ;;
+              cairn-p2p-ts) DIR="packages/ts/cairn-p2p" ;;
+              cairn-p2p-go) DIR="packages/go/cairn-p2p" ;;
+              cairn-p2p-py) DIR="packages/py/cairn-p2p" ;;
+              cairn-p2p-php) DIR="packages/php/cairn-p2p" ;;
+              cairn-relay) DIR="services/relay" ;;
+              cairn-signal) DIR="services/signaling" ;;
+              *) echo "Unknown component: $name"; continue ;;
+            esac
+
+            # Find previous tag for this component
+            case "$name" in
+              cairn-p2p-go)
+                PREV_TAG=$(git tag --list "packages/go/cairn-p2p/v*" --sort=-version:refname | grep -v "^${tag}$" | head -1)
+                ;;
+              *)
+                PREV_TAG=$(git tag --list "${name}-*" --sort=-version:refname | grep -v "^${tag}$" | head -1)
+                ;;
+            esac
+
+            # Generate scoped changelog
+            if [ -n "$PREV_TAG" ]; then
+              echo "  Changelog: $PREV_TAG..$tag -- $DIR"
+              CHANGELOG=$(git log --format="- %s (%h)" "$PREV_TAG".."$tag" -- "$DIR" | grep -v 'chore(release):' || true)
+            else
+              echo "  Changelog: initial -- $DIR"
+              CHANGELOG=$(git log --format="- %s (%h)" "$tag" -- "$DIR" | grep -v 'chore(release):' || true)
+            fi
+
+            if [ -z "$CHANGELOG" ]; then
+              CHANGELOG="Initial release"
+            fi
+
+            echo "$CHANGELOG" > /tmp/release-notes.md
+            echo "  Notes:"
+            cat /tmp/release-notes.md
+
+            gh release create "$tag" \
+              --title "$name v$version" \
+              --notes-file /tmp/release-notes.md
+
+            echo ""
+          done <<< "${{ steps.bump.outputs.bumped }}"

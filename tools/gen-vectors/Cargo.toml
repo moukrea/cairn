@@ -1,0 +1,22 @@
+[package]
+name = "gen-vectors"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+cairn-p2p = { path = "../../packages/rs/cairn-p2p" }
+ciborium = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_bytes = "0.11"
+hex = "0.4"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+hkdf = "0.12"
+sha2 = "0.10"
+aes-gcm = "0.10"
+chacha20poly1305 = "0.10"
+hmac = "0.12"
+rand = "0.8"
+spake2 = "0.4"

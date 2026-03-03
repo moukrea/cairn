@@ -1,0 +1,75 @@
+# Channel multiplexing interop tests — yamux streams with ChannelInit
+# Validates: multiple channels isolated, ChannelInit payload, channel_opened event
+
+scenarios:
+  - scenario: channel-mux-basic
+    description: Multiple yamux streams opened, data isolated per channel
+    tier: 0
+    category: data
+    participants:
+      - { role: peer_a, lang: any }
+      - { role: peer_b, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer_a, params: { mechanism: psk, flow: initiation, psk: "test-mux-psk" } }
+      - { type: pair, actor: peer_b, params: { mechanism: psk, flow: initiation, psk: "test-mux-psk" } }
+      - { type: establish_session, actor: peer_a, params: {} }
+      - { type: open_channel, actor: peer_a, params: { name: channel-alpha } }
+      - { type: open_channel, actor: peer_a, params: { name: channel-beta } }
+      - { type: send_data, actor: peer_a, params: { channel: channel-alpha, payload_hex: "616c706861" } }
+      - { type: send_data, actor: peer_a, params: { channel: channel-beta, payload_hex: "62657461" } }
+    expected:
+      - { type: message_received, actor: peer_b, params: { channel: channel-alpha, payload_hex: "616c706861" } }
+      - { type: message_received, actor: peer_b, params: { channel: channel-beta, payload_hex: "62657461" } }
+      - { type: status, actor: peer_b, params: { channels_opened: ["channel-alpha", "channel-beta"] } }
+    timeout_ms: 5000
+    budget_ms: 5000
+
+  - scenario: channel-init-payload
+    description: ChannelInit payload (name, metadata) sent on stream open, channel_opened fires
+    tier: 0
+    category: data
+    participants:
+      - { role: opener, lang: any }
+      - { role: listener, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: opener, params: { mechanism: psk, flow: initiation, psk: "test-init-psk" } }
+      - { type: pair, actor: listener, params: { mechanism: psk, flow: initiation, psk: "test-init-psk" } }
+      - { type: establish_session, actor: opener, params: {} }
+      - type: open_channel
+        actor: opener
+        params:
+          name: custom-channel
+          metadata: { version: "1.0", purpose: "test" }
+    expected:
+      - type: status
+        actor: listener
+        params:
+          event: channel_opened
+          channel_name: custom-channel
+          metadata: { version: "1.0", purpose: "test" }
+    timeout_ms: 5000
+    budget_ms: 5000
+
+  - scenario: channel-reserved-rejection
+    description: Opening a channel with __cairn_ prefix is rejected
+    tier: 0
+    category: data
+    participants:
+      - { role: peer, lang: any }
+      - { role: other, lang: any }
+    network: { nat_profile: open }
+    actions:
+      - { type: pair, actor: peer, params: { mechanism: psk, flow: initiation, psk: "test-reserved-psk" } }
+      - { type: pair, actor: other, params: { mechanism: psk, flow: initiation, psk: "test-reserved-psk" } }
+      - { type: establish_session, actor: peer, params: {} }
+      - { type: open_channel, actor: peer, params: { name: "__cairn_test" } }
+    expected:
+      - type: error
+        actor: peer
+        params:
+          error_type: Protocol
+          description: "Reserved channel prefix __cairn_ rejected for user channels"
+    timeout_ms: 5000
+    budget_ms: 5000
