@@ -1,0 +1,26 @@
+services:
+  signaling:
+    image: ghcr.io/moukrea/cairn-signal:latest
+    environment:
+      CAIRN_SIGNAL_LISTEN_ADDR: "0.0.0.0:8443"
+
+  relay:
+    image: ghcr.io/moukrea/cairn-relay:latest
+    environment:
+      CAIRN_RELAY_LISTEN_ADDR: "0.0.0.0:3478"
+
+  server:
+    build:
+      context: ../../
+      dockerfile: demo/server-node/Dockerfile
+    environment:
+      CAIRN_SIGNAL_SERVERS: "ws://signaling:8443"
+      CAIRN_TURN_SERVERS: "turn:relay:3478"
+      CAIRN_MGMT_ENABLED: "true"
+    ports:
+      - "9090:9090"
+    volumes:
+      - server-data:/data
+
+volumes:
+  server-data:

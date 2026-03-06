@@ -1,0 +1,17 @@
+# cairn-folder-sync: P2P folder sync demo (Rust)
+# Build from repo root: docker build -f demo/folder-sync/Dockerfile.rust -t cairn-demo-folder-sync-rust .
+
+# --- Builder stage ---
+FROM rust:1.85-bookworm AS builder
+WORKDIR /build
+COPY . .
+WORKDIR /build/demo/folder-sync/rust
+RUN cargo build --release
+
+# --- Runtime stage ---
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN useradd -r -s /bin/false cairn
+USER cairn
+COPY --from=builder /build/demo/folder-sync/rust/target/release/cairn-folder-sync /usr/local/bin/cairn-folder-sync
+ENTRYPOINT ["cairn-folder-sync"]

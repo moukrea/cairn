@@ -1,0 +1,17 @@
+# cairn-chat: P2P messaging demo (Rust)
+# Build from repo root: docker build -f demo/messaging/Dockerfile.rust -t cairn-demo-messaging-rust .
+
+# --- Builder stage ---
+FROM rust:latest AS builder
+WORKDIR /build
+COPY . .
+WORKDIR /build/demo/messaging/rust
+RUN cargo build --release
+
+# --- Runtime stage ---
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN useradd -r -s /bin/false cairn
+USER cairn
+COPY --from=builder /build/demo/messaging/rust/target/release/cairn-chat /usr/local/bin/cairn-chat
+ENTRYPOINT ["cairn-chat"]

@@ -1,0 +1,20 @@
+# cairn-chat: P2P messaging demo (Python)
+# Build from repo root: docker build -f demo/messaging/Dockerfile.python -t cairn-demo-messaging-py .
+
+FROM python:3.13-slim-bookworm
+WORKDIR /app
+
+# Copy local cairn-p2p package
+COPY packages/py/cairn-p2p /app/packages/py/cairn-p2p
+
+# Copy demo files
+COPY demo/messaging/python /app/demo/messaging/python
+
+# Install dependencies
+WORKDIR /app/demo/messaging/python
+RUN pip install --no-cache-dir /app/packages/py/cairn-p2p 2>/dev/null || true
+RUN pip install --no-cache-dir . 2>/dev/null || true
+
+RUN useradd -r -s /bin/false cairn
+USER cairn
+ENTRYPOINT ["python", "cairn_chat.py"]

@@ -1,0 +1,16 @@
+services:
+  peer-a:
+    build:
+      context: ../../
+      dockerfile: demo/folder-sync/Dockerfile.rust
+    volumes:
+      - ./sync-a:/sync
+    command: ["--dir", "/sync", "--pair-pin"]
+
+  peer-b:
+    build:
+      context: ../../
+      dockerfile: demo/folder-sync/Dockerfile.rust
+    volumes:
+      - ./sync-b:/sync
+    command: ["--dir", "/sync"]

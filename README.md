@@ -1,6 +1,16 @@
-# cairn
+<p align="center">
+  <img src="cairn.png" alt="cairn" width="450">
+</p>
 
-A universal peer-to-peer connectivity library with end-to-end encryption, available natively in five languages with full inter-compatibility.
+<p align="center">
+  <strong>A universal peer-to-peer connectivity library with end-to-end encryption, available natively in five languages with full inter-compatibility.</strong>
+</p>
+
+---
+
+## Documentation
+
+Full documentation is available at [moukrea.github.io/cairn](https://moukrea.github.io/cairn/).
 
 ## What is cairn?
 

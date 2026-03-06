@@ -44,6 +44,11 @@ composer.phar
 *.test
 cairn-conformance-runner-go
 
+# Website
+website/.docusaurus/
+website/build/
+website/node_modules/
+
 # Environment / secrets
 .env
 .env.*

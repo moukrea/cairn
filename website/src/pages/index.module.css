@@ -1,0 +1,138 @@
+.hero {
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.heroLogo {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 1.5rem;
+}
+
+.heroTagline {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.heroSubtitle {
+  font-size: 1.25rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 2rem;
+}
+
+.heroCtas {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.features {
+  padding: 4rem 2rem;
+  background: var(--ifm-background-surface-color);
+}
+
+.featuresContainer {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+@media (max-width: 768px) {
+  .featureGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.featureCard {
+  padding: 1.5rem;
+  border-radius: 8px;
+  background: var(--ifm-card-background-color);
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.featureCard h3 {
+  margin-top: 0;
+}
+
+.codeExample {
+  padding: 4rem 2rem;
+}
+
+.codeExampleContainer {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.codeExample h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.tiers {
+  padding: 4rem 2rem;
+  background: var(--ifm-background-surface-color);
+}
+
+.tiersContainer {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.tiers h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.tierGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+@media (max-width: 768px) {
+  .tierGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tierCard {
+  padding: 1.5rem;
+  border-radius: 8px;
+  background: var(--ifm-card-background-color);
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.tierCard h3 {
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+}
+
+.tierLabel {
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.tierCard dl {
+  margin: 0;
+}
+
+.tierCard dt {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.tierCard dd {
+  margin-left: 0;
+  font-size: 0.9rem;
+  color: var(--ifm-color-emphasis-700);
+}

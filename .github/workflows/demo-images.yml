@@ -1,0 +1,149 @@
+name: Publish Demo Docker Images
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag for images (e.g. 0.2.0)'
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  demo-images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - demo: messaging
+            lang: rust
+            dockerfile: demo/messaging/Dockerfile.rust
+          - demo: messaging
+            lang: ts
+            dockerfile: demo/messaging/Dockerfile.typescript
+          - demo: messaging
+            lang: go
+            dockerfile: demo/messaging/Dockerfile.go
+          - demo: messaging
+            lang: py
+            dockerfile: demo/messaging/Dockerfile.python
+          - demo: messaging
+            lang: php
+            dockerfile: demo/messaging/Dockerfile.php
+          - demo: folder-sync
+            lang: rust
+            dockerfile: demo/folder-sync/Dockerfile.rust
+          - demo: folder-sync
+            lang: ts
+            dockerfile: demo/folder-sync/Dockerfile.typescript
+          - demo: folder-sync
+            lang: go
+            dockerfile: demo/folder-sync/Dockerfile.go
+          - demo: folder-sync
+            lang: py
+            dockerfile: demo/folder-sync/Dockerfile.python
+          - demo: folder-sync
+            lang: php
+            dockerfile: demo/folder-sync/Dockerfile.php
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            TAG="${{ github.event.release.tag_name }}"
+            VERSION="${TAG#v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/moukrea/cairn-demo-${{ matrix.demo }}-${{ matrix.lang }}:${{ steps.version.outputs.version }}
+            ghcr.io/moukrea/cairn-demo-${{ matrix.demo }}-${{ matrix.lang }}:latest
+
+  server-node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            TAG="${{ github.event.release.tag_name }}"
+            VERSION="${TAG#v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: demo/server-node/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/moukrea/cairn-server:${{ steps.version.outputs.version }}
+            ghcr.io/moukrea/cairn-server:latest
+
+  smoke-test:
+    needs: [demo-images, server-node]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ghcr.io/moukrea/cairn-demo-messaging-rust
+          - ghcr.io/moukrea/cairn-demo-messaging-ts
+          - ghcr.io/moukrea/cairn-demo-messaging-go
+          - ghcr.io/moukrea/cairn-demo-messaging-py
+          - ghcr.io/moukrea/cairn-demo-messaging-php
+          - ghcr.io/moukrea/cairn-demo-folder-sync-rust
+          - ghcr.io/moukrea/cairn-demo-folder-sync-ts
+          - ghcr.io/moukrea/cairn-demo-folder-sync-go
+          - ghcr.io/moukrea/cairn-demo-folder-sync-py
+          - ghcr.io/moukrea/cairn-demo-folder-sync-php
+          - ghcr.io/moukrea/cairn-server
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke test
+        run: docker run --rm ${{ matrix.image }}:latest --help || true

@@ -1,0 +1,32 @@
+services:
+  peer-a:
+    build:
+      context: ../../
+      dockerfile: demo/messaging/Dockerfile.rust
+    stdin_open: true
+    tty: true
+    command: ["--pair-pin"]
+    networks: [cairn]
+
+  peer-b:
+    build:
+      context: ../../
+      dockerfile: demo/messaging/Dockerfile.rust
+    stdin_open: true
+    tty: true
+    # User enters PIN from peer-a
+    networks: [cairn]
+
+  # Optional infrastructure
+  signaling:
+    image: ghcr.io/moukrea/cairn-signal:latest
+    networks: [cairn]
+    profiles: ["infra"]
+
+  relay:
+    image: ghcr.io/moukrea/cairn-relay:latest
+    networks: [cairn]
+    profiles: ["infra"]
+
+networks:
+  cairn:
