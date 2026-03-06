@@ -35,25 +35,17 @@ Add a **server-mode peer** alongside signaling and relay. The server peer provid
 
 Use this to determine which tier you need:
 
-```
-Start
-  |
-  v
-Are your peers on the same LAN?
-  |-- Yes --> Tier 0 is fine. mDNS handles discovery.
-  |-- No
-  v
-Do peers have public IPs or simple NAT?
-  |-- Yes --> Tier 0 is fine. STUN + DHT handles it.
-  |-- No
-  v
-Are peers behind symmetric NAT or corporate firewalls?
-  |-- Yes --> Deploy Tier 1 (Signaling + TURN relay).
-  |-- No
-  v
-Do you need offline message delivery or multi-device sync?
-  |-- Yes --> Deploy Tier 2 (add a Server Peer).
-  |-- No  --> Tier 1 is sufficient.
+```mermaid
+flowchart TD
+    Start --> LAN{"Are your peers on\nthe same LAN?"}
+    LAN -- Yes --> T0a["Tier 0 is fine.\nmDNS handles discovery."]
+    LAN -- No --> PublicIP{"Do peers have public IPs\nor simple NAT?"}
+    PublicIP -- Yes --> T0b["Tier 0 is fine.\nSTUN + DHT handles it."]
+    PublicIP -- No --> SymNAT{"Are peers behind symmetric\nNAT or corporate firewalls?"}
+    SymNAT -- Yes --> T1["Deploy Tier 1\n(Signaling + TURN relay)."]
+    SymNAT -- No --> Offline{"Do you need offline message\ndelivery or multi-device sync?"}
+    Offline -- Yes --> T2["Deploy Tier 2\n(add a Server Peer)."]
+    Offline -- No --> T1suf["Tier 1 is sufficient."]
 ```
 
 ## Next Steps

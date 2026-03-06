@@ -14,6 +14,7 @@
     "@docusaurus/core": "^3.7",
     "@docusaurus/preset-classic": "^3.7",
     "@docusaurus/theme-common": "^3.7",
+    "@docusaurus/theme-mermaid": "^3.9.2",
     "react": "^19",
     "react-dom": "^19"
   },

@@ -16,8 +16,9 @@ Mesh routing is useful when you have 3 or more devices and some cannot reach eac
 
 **Example scenario:**
 
-```
-Laptop <---> Phone <---> Desktop
+```mermaid
+graph LR
+    Laptop <--> Phone <--> Desktop
 ```
 
 The laptop and desktop cannot connect directly (e.g., different networks, strict NAT), but both can reach the phone. With mesh routing enabled, the phone automatically relays traffic between them -- all end-to-end encrypted.
@@ -93,10 +94,11 @@ $node = Node::create(['meshEnabled' => true]);
 
 A common pattern is to designate one device as an always-on hub (using [server mode](/docs/guides/server-mode)) while other devices sync through it.
 
-```
-Phone ---\
-           >--- Hub (Server) ---< Desktop
-Laptop --/
+```mermaid
+graph LR
+    Phone --- Hub["Hub (Server)"]
+    Laptop --- Hub
+    Hub --- Desktop
 ```
 
 The hub:

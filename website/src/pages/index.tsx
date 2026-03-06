@@ -19,17 +19,18 @@ function Hero() {
         Universal peer-to-peer connectivity library
       </h1>
       <p className={styles.heroSubtitle}>
-        End-to-end encrypted. Five languages. Zero infrastructure required.
+        End-to-end encrypted messaging across five languages.
+        No infrastructure required to get started.
       </p>
       <div className={styles.heroCtas}>
         <Link
-          className="button button--primary button--lg"
+          className={styles.ctaPrimary}
           to="/docs/getting-started/installation"
         >
           Get Started
         </Link>
         <Link
-          className="button button--secondary button--lg"
+          className={styles.ctaSecondary}
           href="https://github.com/moukrea/cairn"
         >
           View on GitHub
@@ -42,15 +43,18 @@ function Hero() {
 const features = [
   {
     title: 'Five Languages, One Protocol',
-    description: 'Rust, TypeScript, Go, Python, PHP all interoperate.',
+    description:
+      'Rust, TypeScript, Go, Python, and PHP implementations that fully interoperate over the same wire protocol.',
   },
   {
     title: 'Secure by Default',
-    description: 'Noise XX + Double Ratchet, no opt-in required.',
+    description:
+      'Noise XX handshake with Double Ratchet for forward secrecy. Encryption is always on, not opt-in.',
   },
   {
-    title: 'Zero to Production',
-    description: 'Start with no infrastructure, add signaling/relay when needed.',
+    title: 'Progressive Infrastructure',
+    description:
+      'Start peer-to-peer with zero servers. Add signaling and relay only when your deployment needs it.',
   },
 ];
 
@@ -58,6 +62,11 @@ function Features() {
   return (
     <section className={styles.features}>
       <div className={styles.featuresContainer}>
+        <h2 className={styles.sectionHeading}>Why cairn</h2>
+        <p className={styles.sectionSubheading}>
+          A single protocol for direct, encrypted communication between peers --
+          regardless of language or platform.
+        </p>
         <div className={styles.featureGrid}>
           {features.map((feature) => (
             <div key={feature.title} className={styles.featureCard}>
@@ -134,7 +143,10 @@ function CodeExample() {
   return (
     <section className={styles.codeExample}>
       <div className={styles.codeExampleContainer}>
-        <h2>Get started in minutes</h2>
+        <h2 className={styles.sectionHeading}>Get started in minutes</h2>
+        <p className={styles.sectionSubheading}>
+          Pair two nodes, establish a session, and start sending messages.
+        </p>
         <LanguageTabs>
           {Object.entries(codeExamples).map(([key, { language, code }]) => (
             <TabItem key={key} value={key}>
@@ -150,40 +162,40 @@ function CodeExample() {
 const tiers = [
   {
     name: 'Tier 0',
-    label: 'Zero Infrastructure',
+    label: 'Peer-to-peer only',
     attributes: [
       ['Setup', 'None'],
       ['NAT traversal', 'Public STUN, best-effort'],
-      ['Discovery speed', '5-30s (DHT/mDNS)'],
+      ['Discovery', '5-30s (DHT/mDNS)'],
       ['Offline messages', 'No'],
-      ['Always-on relay', 'No'],
-      ['Multi-device sync', 'Manual'],
+      ['Relay', 'No'],
+      ['Multi-device', 'Manual'],
       ['Cost', 'Free'],
     ],
   },
   {
     name: 'Tier 1',
-    label: 'Signaling + Relay',
+    label: 'With signaling',
     attributes: [
       ['Setup', '2 Docker containers'],
       ['NAT traversal', 'TURN relay, symmetric NAT'],
-      ['Discovery speed', '<1s (signaling)'],
+      ['Discovery', '<1s (signaling)'],
       ['Offline messages', 'No'],
-      ['Always-on relay', 'Yes'],
-      ['Multi-device sync', 'Manual'],
+      ['Relay', 'Yes'],
+      ['Multi-device', 'Manual'],
       ['Cost', 'Free (Cloudflare) or ~$5/mo VPS'],
     ],
   },
   {
     name: 'Tier 2',
-    label: 'Server Peer',
+    label: 'Full stack',
     attributes: [
       ['Setup', '3 Docker containers'],
       ['NAT traversal', 'Full'],
-      ['Discovery speed', '<1s'],
+      ['Discovery', '<1s'],
       ['Offline messages', 'Yes (store-and-forward)'],
-      ['Always-on relay', 'Yes'],
-      ['Multi-device sync', 'Automatic (hub)'],
+      ['Relay', 'Yes'],
+      ['Multi-device', 'Automatic (hub)'],
       ['Cost', 'Same + storage'],
     ],
   },
@@ -193,7 +205,10 @@ function InfrastructureTiers() {
   return (
     <section className={styles.tiers}>
       <div className={styles.tiersContainer}>
-        <h2>Infrastructure Tiers</h2>
+        <h2 className={styles.sectionHeading}>Infrastructure tiers</h2>
+        <p className={styles.sectionSubheading}>
+          Deploy what you need. Each tier builds on the previous one.
+        </p>
         <div className={styles.tierGrid}>
           {tiers.map((tier) => (
             <div key={tier.name} className={styles.tierCard}>
@@ -215,6 +230,31 @@ function InfrastructureTiers() {
   );
 }
 
+function FooterCta() {
+  return (
+    <section className={styles.footerCta}>
+      <h2 className={styles.sectionHeading}>Start building</h2>
+      <p className={styles.footerCtaText}>
+        Read the docs, pick your language, and have two peers talking in minutes.
+      </p>
+      <div className={styles.footerCtaButtons}>
+        <Link
+          className={styles.ctaPrimary}
+          to="/docs/getting-started/installation"
+        >
+          Read the Docs
+        </Link>
+        <Link
+          className={styles.ctaSecondary}
+          href="https://github.com/moukrea/cairn"
+        >
+          View on GitHub
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 export default function Home(): React.ReactElement {
   return (
     <Layout title="Home" description="Universal peer-to-peer connectivity library">
@@ -222,6 +262,7 @@ export default function Home(): React.ReactElement {
       <Features />
       <CodeExample />
       <InfrastructureTiers />
+      <FooterCta />
     </Layout>
   );
 }

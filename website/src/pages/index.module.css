@@ -1,24 +1,39 @@
+/* ── Hero ────────────────────────────────────────────────────────── */
+
 .hero {
-  padding: 4rem 2rem;
+  padding: 6rem 2rem 5rem;
   text-align: center;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
+/* heroLogo styles managed separately -- do not modify */
 .heroLogo {
-  max-width: 160px;
+  max-width: 450px;
   height: auto;
   margin-bottom: 1.5rem;
 }
 
+[data-theme='light'] .heroLogo {
+  filter: invert(1);
+}
+
 .heroTagline {
-  font-size: 2.5rem;
+  font-size: 2.75rem;
   font-weight: 700;
-  margin-bottom: 0.5rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin-bottom: 1rem;
 }
 
 .heroSubtitle {
-  font-size: 1.25rem;
-  color: var(--ifm-color-emphasis-600);
-  margin-bottom: 2rem;
+  font-size: 1.2rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 2.5rem;
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .heroCtas {
@@ -28,20 +43,76 @@
   flex-wrap: wrap;
 }
 
+.ctaPrimary {
+  display: inline-block;
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 2px solid var(--ifm-color-primary);
+  background: var(--ifm-color-primary);
+  color: #fff;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.ctaPrimary:hover {
+  opacity: 0.85;
+  color: #fff;
+  text-decoration: none;
+}
+
+.ctaSecondary {
+  display: inline-block;
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 2px solid var(--ifm-color-emphasis-300);
+  background: transparent;
+  color: var(--ifm-font-color-base);
+  border-radius: 4px;
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+
+.ctaSecondary:hover {
+  border-color: var(--ifm-color-emphasis-500);
+  text-decoration: none;
+}
+
+/* ── Features ────────────────────────────────────────────────────── */
+
 .features {
-  padding: 4rem 2rem;
+  padding: 5rem 2rem;
   background: var(--ifm-background-surface-color);
 }
 
 .featuresContainer {
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
+}
+
+.sectionHeading {
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.sectionSubheading {
+  text-align: center;
+  font-size: 1.05rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 3rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .featureGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 @media (max-width: 768px) {
@@ -51,18 +122,30 @@
 }
 
 .featureCard {
-  padding: 1.5rem;
-  border-radius: 8px;
-  background: var(--ifm-card-background-color);
+  padding: 2rem;
   border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 4px;
+  background: var(--ifm-card-background-color);
 }
 
 .featureCard h3 {
   margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 
+.featureCard p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-700);
+}
+
+/* ── Code Example ────────────────────────────────────────────────── */
+
 .codeExample {
-  padding: 4rem 2rem;
+  padding: 5rem 2rem;
 }
 
 .codeExampleContainer {
@@ -70,30 +153,22 @@
   margin: 0 auto;
 }
 
-.codeExample h2 {
-  text-align: center;
-  margin-bottom: 2rem;
-}
+/* ── Infrastructure Tiers ────────────────────────────────────────── */
 
 .tiers {
-  padding: 4rem 2rem;
+  padding: 5rem 2rem;
   background: var(--ifm-background-surface-color);
 }
 
 .tiersContainer {
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
-}
-
-.tiers h2 {
-  text-align: center;
-  margin-bottom: 2rem;
 }
 
 .tierGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 @media (max-width: 768px) {
@@ -103,36 +178,93 @@
 }
 
 .tierCard {
-  padding: 1.5rem;
-  border-radius: 8px;
-  background: var(--ifm-card-background-color);
+  padding: 2rem;
   border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 4px;
+  background: var(--ifm-card-background-color);
 }
 
 .tierCard h3 {
   margin-top: 0;
   margin-bottom: 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
 }
 
 .tierLabel {
-  font-size: 0.85rem;
-  color: var(--ifm-color-emphasis-600);
-  margin-bottom: 1rem;
   display: block;
+  font-size: 0.9rem;
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
 }
 
 .tierCard dl {
   margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 1rem;
+  align-items: baseline;
 }
 
 .tierCard dt {
   font-weight: 600;
-  font-size: 0.9rem;
-  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-600);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .tierCard dd {
   margin-left: 0;
   font-size: 0.9rem;
-  color: var(--ifm-color-emphasis-700);
+  color: var(--ifm-font-color-base);
+}
+
+/* ── Footer CTA ──────────────────────────────────────────────────── */
+
+.footerCta {
+  padding: 5rem 2rem;
+  text-align: center;
+}
+
+.footerCtaText {
+  font-size: 1.05rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 2rem;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.footerCtaButtons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .hero {
+    padding: 4rem 1.5rem 3rem;
+  }
+
+  .heroTagline {
+    font-size: 2rem;
+  }
+
+  .features,
+  .codeExample,
+  .tiers,
+  .footerCta {
+    padding: 3.5rem 1.5rem;
+  }
+
+  .sectionSubheading {
+    margin-bottom: 2rem;
+  }
 }

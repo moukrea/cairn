@@ -28,16 +28,13 @@ cairn uses **X25519 Diffie-Hellman** key exchange to establish shared secrets be
 
 The session handshake follows the **Noise XX** pattern, a three-message authenticated key exchange:
 
-```
-Initiator                         Responder
-    |                                 |
-    |--- HandshakeInit (-> e) ------->|
-    |                                 |
-    |<-- HandshakeResponse            |
-    |    (<- e, ee, s, es) -----------|
-    |                                 |
-    |--- HandshakeFinal (-> s, se) -->|
-    |                                 |
+```mermaid
+sequenceDiagram
+    participant I as Initiator
+    participant R as Responder
+    I->>R: HandshakeInit (→ e)
+    R->>I: HandshakeResponse (← e, ee, s, es)
+    I->>R: HandshakeFinal (→ s, se)
 ```
 
 **Message breakdown:**

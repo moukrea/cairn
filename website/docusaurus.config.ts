@@ -6,6 +6,10 @@ const config: Config = {
   title: 'cairn',
   tagline: 'Universal peer-to-peer connectivity',
   favicon: 'img/cairn.png',
+  markdown: {
+    mermaid: true,
+  },
+  themes: ['@docusaurus/theme-mermaid'],
 
   url: 'https://moukrea.github.io',
   baseUrl: '/cairn/',
@@ -45,8 +49,9 @@ const config: Config = {
     navbar: {
       title: '',
       logo: {
-        alt: 'cairn logo',
-        src: 'img/cairn.png',
+        alt: 'cairn',
+        src: 'img/cairn-wordmark-dark.png',
+        srcDark: 'img/cairn-wordmark-light.png',
       },
       items: [
         {
