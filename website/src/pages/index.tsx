@@ -2,6 +2,7 @@ import React from 'react';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import useBaseUrl from '@docusaurus/useBaseUrl';
+import CodeBlock from '@theme/CodeBlock';
 import TabItem from '@theme/TabItem';
 import LanguageTabs from '@site/src/components/LanguageTabs';
 import styles from './index.module.css';
@@ -70,16 +71,10 @@ function Features() {
   );
 }
 
-function CodeExample() {
-  return (
-    <section className={styles.codeExample}>
-      <div className={styles.codeExampleContainer}>
-        <h2>Get started in minutes</h2>
-        <LanguageTabs>
-          <TabItem value="rust">
-
-{`\`\`\`rust
-use cairn_p2p::{Node, CairnConfig, create};
+const codeExamples: Record<string, { language: string; code: string }> = {
+  rust: {
+    language: 'rust',
+    code: `use cairn_p2p::{Node, CairnConfig, create};
 
 let node = create(CairnConfig::default())?;
 node.start().await?;
@@ -87,66 +82,65 @@ let pairing = node.pair_generate_pin().await?;
 println!("PIN: {}", pairing.pin);
 // Responder enters PIN, then:
 let session = node.connect(&peer_id).await?;
-session.send("chat", b"hello").await?;
-\`\`\``}
-
-          </TabItem>
-          <TabItem value="typescript">
-
-{`\`\`\`typescript
-import { Node } from 'cairn-p2p';
+session.send("chat", b"hello").await?;`,
+  },
+  typescript: {
+    language: 'typescript',
+    code: `import { Node } from 'cairn-p2p';
 
 const node = await Node.create();
 const { pin } = await node.pairGeneratePin();
 console.log(\`PIN: \${pin}\`);
 // Responder enters PIN, then:
 const session = await node.connect(peerId);
-await session.send('chat', Buffer.from('hello'));
-\`\`\``}
-
-          </TabItem>
-          <TabItem value="go">
-
-{`\`\`\`go
-import cairn "github.com/moukrea/cairn/packages/go/cairn-p2p"
+await session.send('chat', Buffer.from('hello'));`,
+  },
+  go: {
+    language: 'go',
+    code: `import cairn "github.com/moukrea/cairn/packages/go/cairn-p2p"
 
 node, _ := cairn.Create()
 data, _ := node.PairGeneratePin()
 fmt.Println("PIN:", data.Pin)
 // Responder enters PIN, then:
 session, _ := node.Connect(peerId)
-session.Send("chat", []byte("hello"))
-\`\`\``}
-
-          </TabItem>
-          <TabItem value="python">
-
-{`\`\`\`python
-from cairn import create
+session.Send("chat", []byte("hello"))`,
+  },
+  python: {
+    language: 'python',
+    code: `from cairn import create
 
 node = await create()
 data = await node.pair_generate_pin()
 print(f"PIN: {data.pin}")
 # Responder enters PIN, then:
 session = await node.connect(peer_id)
-await session.send("chat", b"hello")
-\`\`\``}
-
-          </TabItem>
-          <TabItem value="php">
-
-{`\`\`\`php
-use Cairn\\Node;
+await session.send("chat", b"hello")`,
+  },
+  php: {
+    language: 'php',
+    code: `use Cairn\\Node;
 
 $node = Node::create();
 $data = $node->pairGeneratePin();
 echo "PIN: " . $data->pin . "\\n";
 // Responder enters PIN, then:
 $session = $node->connect($peerId);
-$session->send('chat', 'hello');
-\`\`\``}
+$session->send('chat', 'hello');`,
+  },
+};
 
-          </TabItem>
+function CodeExample() {
+  return (
+    <section className={styles.codeExample}>
+      <div className={styles.codeExampleContainer}>
+        <h2>Get started in minutes</h2>
+        <LanguageTabs>
+          {Object.entries(codeExamples).map(([key, { language, code }]) => (
+            <TabItem key={key} value={key}>
+              <CodeBlock language={language}>{code}</CodeBlock>
+            </TabItem>
+          ))}
         </LanguageTabs>
       </div>
     </section>

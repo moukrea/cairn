@@ -43,7 +43,7 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'cairn',
+      title: '',
       logo: {
         alt: 'cairn logo',
         src: 'img/cairn.png',
