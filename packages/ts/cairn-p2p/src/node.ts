@@ -33,6 +33,9 @@ import type { MessageEnvelope } from './protocol/envelope.js';
 import { DATA_MESSAGE } from './protocol/message-types.js';
 import { MessageQueue } from './session/message-queue.js';
 import type { EnqueueResult } from './session/message-queue.js';
+import type { ConnectionHint } from './pairing/payload.js';
+import type { Libp2p } from 'libp2p';
+import { createCairnNode } from './transport/libp2p-node.js';
 
 /** Fully resolved configuration with no optional fields. */
 export interface ResolvedConfig {
@@ -333,6 +336,10 @@ export class Node {
   private _closed = false;
   private _identity: IdentityKeypair | null = null;
   private readonly _pairedPeers = new Set<string>();
+  /** The libp2p node instance (null until startTransport is called). */
+  private _libp2pNode: Libp2p | null = null;
+  /** Listen addresses reported by the libp2p node. */
+  private _listenAddresses: string[] = [];
 
   private constructor(config: ResolvedConfig) {
     this._config = config;
@@ -375,6 +382,46 @@ export class Node {
     const node = new Node(resolved);
     node._identity = await IdentityKeypair.generate();
     return node;
+  }
+
+  /**
+   * Create a node AND start the transport layer.
+   * This is the recommended entry point for applications that need real
+   * network connectivity.
+   */
+  static async createAndStart(config?: Partial<CairnConfig>): Promise<Node> {
+    const node = await Node.create(config);
+    await node.startTransport();
+    return node;
+  }
+
+  /**
+   * Start the libp2p transport layer.
+   *
+   * Creates a libp2p node with environment-appropriate transports
+   * (WebRTC + WebSocket in browser, TCP + WebSocket in Node.js),
+   * starts listening, and populates listen addresses.
+   *
+   * Safe to skip in unit tests — the node works without transport.
+   */
+  async startTransport(): Promise<void> {
+    const libp2pNode = await createCairnNode();
+    await libp2pNode.start();
+    this._libp2pNode = libp2pNode;
+
+    // Collect listen addresses
+    const addrs = libp2pNode.getMultiaddrs();
+    this._listenAddresses = addrs.map(a => a.toString());
+  }
+
+  /** Get the libp2p node (null if transport not started). */
+  get libp2pNode(): Libp2p | null {
+    return this._libp2pNode;
+  }
+
+  /** Get the node's listen addresses (available after startTransport). */
+  get listenAddresses(): string[] {
+    return [...this._listenAddresses];
   }
 
   /** Get the node configuration. */
@@ -436,10 +483,17 @@ export class Node {
     const nonce = generateNonce();
     const now = Math.floor(Date.now() / 1000);
     const ttlSec = Math.floor(this._config.reconnectionPolicy.pairingPayloadExpiry / 1000);
+
+    // Include listen addresses as connection hints if transport is running
+    const hints: ConnectionHint[] | undefined = this._listenAddresses.length > 0
+      ? this._listenAddresses.map(addr => ({ hintType: 'multiaddr', value: addr }))
+      : undefined;
+
     return {
       peerId: this._identity.peerId(),
       nonce,
-      pakeCredential: nonce, // use nonce as PAKE credential (same as Rust)
+      pakeCredential: nonce,
+      hints,
       createdAt: now,
       expiresAt: now + ttlSec,
     };
