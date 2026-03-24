@@ -467,13 +467,34 @@ impl Default for CairnConfigBuilder {
 use crate::api::node::ApiNode;
 
 /// Create a cairn node with default (Tier 0) configuration.
+///
+/// Does NOT start the transport layer. Call `node.start_transport().await`
+/// to enable real network connections, or use `create_and_start()` for the
+/// async version that starts transport automatically.
 pub fn create() -> Result<ApiNode> {
     create_with_config(CairnConfig::default())
 }
 
 /// Create a cairn node with the given configuration.
+///
+/// Does NOT start the transport layer. See `create()` for details.
 pub fn create_with_config(config: CairnConfig) -> Result<ApiNode> {
     ApiNode::new(config)
+}
+
+/// Create a cairn node with default config AND start the transport layer.
+///
+/// This is the recommended entry point for applications that need real
+/// network connectivity. Returns a node that is ready to pair and connect.
+pub async fn create_and_start() -> Result<ApiNode> {
+    create_and_start_with_config(CairnConfig::default()).await
+}
+
+/// Create a cairn node with the given config AND start the transport layer.
+pub async fn create_and_start_with_config(config: CairnConfig) -> Result<ApiNode> {
+    let mut node = ApiNode::new(config)?;
+    node.start_transport().await?;
+    Ok(node)
 }
 
 /// Create a cairn server node with default server configuration.
@@ -485,6 +506,13 @@ pub fn create_server() -> Result<ApiNode> {
 pub fn create_server_with_config(mut config: CairnConfig) -> Result<ApiNode> {
     config.server_mode = true;
     ApiNode::new(config)
+}
+
+/// Create a cairn server node with transport started.
+pub async fn create_server_and_start() -> Result<ApiNode> {
+    let mut node = create_server()?;
+    node.start_transport().await?;
+    Ok(node)
 }
 
 // ---------------------------------------------------------------------------
