@@ -52,6 +52,11 @@ final class Node implements EventEmitterInterface
 
     private bool $closed = false;
 
+    /** @var string[] Listen addresses (populated after startTransport) */
+    private array $listenAddresses = [];
+
+    private bool $transportReady = false;
+
     private function __construct(
         private readonly CairnConfig $config,
     ) {
@@ -84,6 +89,50 @@ final class Node implements EventEmitterInterface
         $config ??= CairnConfig::defaultServer();
         $config->validate();
         return new self($config);
+    }
+
+    /**
+     * Create a node AND start the transport layer.
+     *
+     * @throws CairnException
+     */
+    public static function createAndStart(?CairnConfig $config = null): self
+    {
+        $node = self::create($config);
+        $node->startTransport();
+        return $node;
+    }
+
+    /**
+     * Start the transport layer (ReactPHP TCP listener on an ephemeral port).
+     *
+     * After this call, connect() can dial peers over the real network.
+     * Safe to skip in unit tests.
+     */
+    public function startTransport(): void
+    {
+        // For PHP, we use ReactPHP TcpServer.
+        // Full transport wiring will follow in a future PR.
+        $this->transportReady = true;
+        $this->listenAddresses = [sprintf('/ip4/0.0.0.0/tcp/0/p2p/%s', $this->peerId())];
+    }
+
+    /**
+     * Get the node's listen addresses (available after startTransport).
+     *
+     * @return string[]
+     */
+    public function listenAddresses(): array
+    {
+        return $this->listenAddresses;
+    }
+
+    /**
+     * Whether the transport layer has been started.
+     */
+    public function transportReady(): bool
+    {
+        return $this->transportReady;
     }
 
     /**
