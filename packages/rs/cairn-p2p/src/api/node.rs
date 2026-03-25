@@ -146,25 +146,36 @@ impl ApiNode {
         let transport_config = TransportConfig::default();
         let mut controller = build_swarm(&self.identity, &transport_config).await?;
 
-        // Listen on TCP and QUIC on ephemeral ports
+        // Listen on TCP, QUIC, and WebSocket on ephemeral ports.
+        // WebSocket is critical for browser clients which cannot use TCP/QUIC.
         controller
             .listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap())
             .await?;
         controller
             .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap())
             .await?;
+        controller
+            .listen_on("/ip4/0.0.0.0/tcp/0/ws".parse().unwrap())
+            .await?;
 
-        // Collect initial listen addresses
+        // Collect initial listen addresses.
+        // TCP binds fast but WebSocket takes longer — keep draining
+        // events until we hit a timeout with no new events.
         let mut addrs = Vec::new();
-        // Drain the initial ListeningOn events (2 expected: TCP + QUIC)
-        for _ in 0..4 {
-            match tokio::time::timeout(std::time::Duration::from_secs(2), controller.next_event())
-                .await
+        loop {
+            match tokio::time::timeout(
+                std::time::Duration::from_millis(500),
+                controller.next_event(),
+            )
+            .await
             {
                 Ok(Some(CairnSwarmEvent::ListeningOn { address })) => {
                     addrs.push(address.to_string());
                 }
-                _ => break,
+                Ok(Some(_)) => {
+                    // Non-listen event (e.g., mDNS), keep draining
+                }
+                _ => break, // Timeout or channel closed — done collecting
             }
         }
         *self.listen_addresses.write().await = addrs;
@@ -310,21 +321,58 @@ impl ApiNode {
             .pairing_payload_expiry
             .as_secs();
 
-        // Include listen addresses as connection hints if transport is running
+        // Include listen addresses as connection hints if transport is running.
+        // Filter to useful addresses only (skip loopback, Docker bridges) and
+        // limit count to stay within QR payload size limits (~256 bytes).
+        // Priority: /ws (browser-compatible) > /tcp (native) > /quic.
         let hints = {
             let addrs = self.listen_addresses.read().await;
             if addrs.is_empty() {
                 None
             } else {
-                Some(
-                    addrs
+                let is_useful = |a: &&String| -> bool {
+                    !a.contains("/127.0.0.1/") // skip loopback
+                        && !a.contains("/172.") // skip Docker bridges
+                        && !a.contains("/10.")  // skip private class A
+                };
+                // Collect WS addresses first (browser-compatible), then TCP
+                let mut selected: Vec<&String> = addrs
+                    .iter()
+                    .filter(is_useful)
+                    .filter(|a| a.contains("/ws"))
+                    .take(2)
+                    .collect();
+                let tcp: Vec<&String> = addrs
+                    .iter()
+                    .filter(is_useful)
+                    .filter(|a| a.contains("/tcp/") && !a.contains("/ws"))
+                    .take(2)
+                    .collect();
+                selected.extend(tcp);
+
+                // Fallback: if no non-private addresses, use any WS + TCP
+                if selected.is_empty() {
+                    selected = addrs
                         .iter()
-                        .map(|a| ConnectionHint {
-                            hint_type: "multiaddr".to_string(),
-                            value: a.clone(),
-                        })
-                        .collect(),
-                )
+                        .filter(|a| a.contains("/ws") || (a.contains("/tcp/") && !a.contains("/quic")))
+                        .filter(|a| !a.contains("/127.0.0.1/"))
+                        .take(4)
+                        .collect();
+                }
+
+                if selected.is_empty() {
+                    None
+                } else {
+                    Some(
+                        selected
+                            .into_iter()
+                            .map(|a| ConnectionHint {
+                                hint_type: "multiaddr".to_string(),
+                                value: a.clone(),
+                            })
+                            .collect(),
+                    )
+                }
             }
         };
 

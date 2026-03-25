@@ -908,16 +908,19 @@ mod tests {
         let addr: Multiaddr = "/ip4/192.0.2.1/tcp/1".parse().unwrap();
         controller.dial(addr).await.unwrap();
 
-        // We should eventually get a DialFailure event
-        let event =
-            tokio::time::timeout(std::time::Duration::from_secs(15), controller.next_event())
+        // We should eventually get a DialFailure event.
+        // Skip any non-DialFailure events (e.g., mDNS discoveries from
+        // other test instances running in parallel).
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
+        loop {
+            let event = tokio::time::timeout_at(deadline, controller.next_event())
                 .await
-                .expect("should receive event within timeout")
+                .expect("should receive DialFailure within timeout")
                 .expect("event should not be None");
-
-        match event {
-            SwarmEvent::DialFailure { .. } => {}
-            other => panic!("expected DialFailure event, got: {other:?}"),
+            match event {
+                SwarmEvent::DialFailure { .. } => break,
+                _ => continue, // skip mDNS, listening, etc.
+            }
         }
 
         controller.shutdown().await.unwrap();

@@ -55,3 +55,4 @@ async fn swarm_sender_none_without_transport() {
         "swarm_sender should be None without transport"
     );
 }
+
