@@ -1,6 +1,6 @@
 {
   "name": "cairn-p2p",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -20,7 +20,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts && tsup src/browser.ts --format esm,cjs --dts --no-splitting",
+    "build": "tsup src/index.ts --format esm,cjs --dts && tsup src/browser.ts --format esm,cjs --dts --no-splitting --external @libp2p/tcp --external @libp2p/webrtc --external @libp2p/websockets --external @libp2p/webtransport --external @libp2p/yamux --external @libp2p/circuit-relay-v2 --external @chainsafe/libp2p-noise --external libp2p --external @multiformats/multiaddr",
     "test": "vitest run",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
