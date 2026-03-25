@@ -24,6 +24,8 @@ use crate::session::queue::{MessageQueue, QueueConfig};
 use crate::session::{SessionId, SessionState, SessionStateMachine};
 use crate::transport::fallback::FallbackTransportType;
 use crate::transport::nat::NatType;
+use crate::transport::swarm::{build_swarm, SwarmCommandSender, SwarmEvent as CairnSwarmEvent};
+use crate::transport::TransportConfig;
 
 use super::events::{ConnectionState, Event, NetworkInfo};
 
@@ -38,7 +40,7 @@ pub struct ApiNode {
     trust_store: RwLock<Box<dyn TrustStore>>,
     event_tx: mpsc::Sender<Event>,
     event_rx: Mutex<mpsc::Receiver<Event>>,
-    sessions: RwLock<HashMap<String, ApiSession>>,
+    sessions: Arc<RwLock<HashMap<String, ApiSession>>>,
     #[allow(clippy::type_complexity)]
     custom_registry: Arc<RwLock<HashMap<u16, Arc<dyn Fn(&str, &[u8]) + Send + Sync>>>>,
     network_info: RwLock<NetworkInfo>,
@@ -54,6 +56,11 @@ pub struct ApiNode {
                 + Sync,
         >,
     >,
+    /// Cloneable handle for sending commands to the libp2p swarm.
+    /// None when transport has not been started (e.g., unit tests).
+    swarm_sender: Option<SwarmCommandSender>,
+    /// Listen addresses reported by the swarm after start_transport().
+    listen_addresses: RwLock<Vec<String>>,
 }
 
 pub struct ConnectResult {
@@ -83,10 +90,12 @@ impl ApiNode {
             trust_store: RwLock::new(Box::new(InMemoryTrustStore::new())),
             event_tx: tx,
             event_rx: Mutex::new(rx),
-            sessions: RwLock::new(HashMap::new()),
+            sessions: Arc::new(RwLock::new(HashMap::new())),
             custom_registry: Arc::new(RwLock::new(HashMap::new())),
             network_info: RwLock::new(NetworkInfo::default()),
             transport_connector: None,
+            swarm_sender: None,
+            listen_addresses: RwLock::new(Vec::new()),
         })
     }
 
@@ -113,6 +122,141 @@ impl ApiNode {
         &self,
     ) -> &Arc<RwLock<HashMap<u16, Arc<dyn Fn(&str, &[u8]) + Send + Sync>>>> {
         &self.custom_registry
+    }
+
+    /// Get the swarm command sender, if transport is started.
+    pub fn swarm_sender(&self) -> Option<&SwarmCommandSender> {
+        self.swarm_sender.as_ref()
+    }
+
+    /// Get the node's listen addresses (available after start_transport).
+    pub async fn listen_addresses(&self) -> Vec<String> {
+        self.listen_addresses.read().await.clone()
+    }
+
+    /// Start the libp2p transport layer.
+    ///
+    /// Builds a swarm with TCP + QUIC + WebSocket, listens on ephemeral ports,
+    /// and spawns a background task that bridges swarm events to the node's
+    /// event channel. After this call, `connect()` will dial peers over the
+    /// real network instead of running an in-memory handshake.
+    ///
+    /// Safe to skip in unit tests — the node works without transport (in-memory mode).
+    pub async fn start_transport(&mut self) -> Result<()> {
+        let transport_config = TransportConfig::default();
+        let mut controller = build_swarm(&self.identity, &transport_config).await?;
+
+        // Listen on TCP and QUIC on ephemeral ports
+        controller
+            .listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap())
+            .await?;
+        controller
+            .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap())
+            .await?;
+
+        // Collect initial listen addresses
+        let mut addrs = Vec::new();
+        // Drain the initial ListeningOn events (2 expected: TCP + QUIC)
+        for _ in 0..4 {
+            match tokio::time::timeout(std::time::Duration::from_secs(2), controller.next_event())
+                .await
+            {
+                Ok(Some(CairnSwarmEvent::ListeningOn { address })) => {
+                    addrs.push(address.to_string());
+                }
+                _ => break,
+            }
+        }
+        *self.listen_addresses.write().await = addrs;
+
+        let sender = controller.command_sender();
+        self.swarm_sender = Some(sender);
+
+        // Spawn background task to bridge swarm events → node events
+        let event_tx = self.event_tx.clone();
+        let sessions = self.sessions.clone();
+        tokio::spawn(async move {
+            while let Some(event) = controller.next_event().await {
+                match event {
+                    CairnSwarmEvent::InboundConnection { peer_id } => {
+                        let _ = event_tx
+                            .send(Event::StateChanged {
+                                peer_id: peer_id.to_string(),
+                                state: ConnectionState::Connected,
+                            })
+                            .await;
+                    }
+                    CairnSwarmEvent::OutboundConnection { peer_id } => {
+                        let _ = event_tx
+                            .send(Event::StateChanged {
+                                peer_id: peer_id.to_string(),
+                                state: ConnectionState::Connected,
+                            })
+                            .await;
+                    }
+                    CairnSwarmEvent::ConnectionClosed { peer_id } => {
+                        let _ = event_tx
+                            .send(Event::StateChanged {
+                                peer_id: peer_id.to_string(),
+                                state: ConnectionState::Disconnected,
+                            })
+                            .await;
+                    }
+                    CairnSwarmEvent::RequestReceived {
+                        peer_id, request, ..
+                    } => {
+                        // Route to the session for this peer
+                        let peer_str = peer_id.to_string();
+                        let sessions_guard = sessions.read().await;
+                        if let Some(session) = sessions_guard.get(&peer_str) {
+                            session.dispatch_incoming(&request).await.ok();
+                        } else {
+                            // No session yet — deliver as raw MessageReceived
+                            let _ = event_tx
+                                .send(Event::MessageReceived {
+                                    peer_id: peer_str,
+                                    channel: "rpc".to_string(),
+                                    data: request,
+                                })
+                                .await;
+                        }
+                    }
+                    CairnSwarmEvent::ResponseReceived {
+                        peer_id, response, ..
+                    } => {
+                        let peer_str = peer_id.to_string();
+                        let sessions_guard = sessions.read().await;
+                        if let Some(session) = sessions_guard.get(&peer_str) {
+                            session.dispatch_incoming(&response).await.ok();
+                        }
+                    }
+                    CairnSwarmEvent::MdnsPeerDiscovered {
+                        peer_id,
+                        addresses: _,
+                    } => {
+                        let _ = event_tx
+                            .send(Event::StateChanged {
+                                peer_id: peer_id.to_string(),
+                                state: ConnectionState::Connected,
+                            })
+                            .await;
+                    }
+                    CairnSwarmEvent::DialFailure {
+                        peer_id: Some(pid),
+                        error,
+                    } => {
+                        let _ = event_tx
+                            .send(Event::Error {
+                                error: format!("dial failed for {pid}: {error}"),
+                            })
+                            .await;
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        Ok(())
     }
 
     /// Register a node-wide handler for a custom message type (0xF000-0xFFFF).
@@ -150,7 +294,9 @@ impl ApiNode {
         }));
     }
 
-    fn create_pairing_payload(&self) -> PairingPayload {
+    async fn create_pairing_payload(&self) -> PairingPayload {
+        use crate::pairing::mechanisms::ConnectionHint;
+
         let mut nonce = [0u8; 16];
         use rand::RngCore;
         rand::thread_rng().fill_bytes(&mut nonce);
@@ -163,11 +309,30 @@ impl ApiNode {
             .reconnection_policy
             .pairing_payload_expiry
             .as_secs();
+
+        // Include listen addresses as connection hints if transport is running
+        let hints = {
+            let addrs = self.listen_addresses.read().await;
+            if addrs.is_empty() {
+                None
+            } else {
+                Some(
+                    addrs
+                        .iter()
+                        .map(|a| ConnectionHint {
+                            hint_type: "multiaddr".to_string(),
+                            value: a.clone(),
+                        })
+                        .collect(),
+                )
+            }
+        };
+
         PairingPayload {
             peer_id: self.local_identity.peer_id().clone(),
             nonce,
             pake_credential: nonce.to_vec(),
-            connection_hints: None,
+            connection_hints: hints,
             created_at: now,
             expires_at: now + ttl,
         }
@@ -220,7 +385,7 @@ impl ApiNode {
     }
 
     pub async fn pair_generate_qr(&self) -> Result<QrPairingData> {
-        let payload = self.create_pairing_payload();
+        let payload = self.create_pairing_payload().await;
         let mechanism = QrCodeMechanism::default();
         let cbor = mechanism
             .generate_payload(&payload)
@@ -243,7 +408,7 @@ impl ApiNode {
     }
 
     pub async fn pair_generate_pin(&self) -> Result<PinPairingData> {
-        let payload = self.create_pairing_payload();
+        let payload = self.create_pairing_payload().await;
         let mechanism = PinCodeMechanism::default();
         let raw = mechanism
             .generate_payload(&payload)
@@ -270,7 +435,7 @@ impl ApiNode {
     }
 
     pub async fn pair_generate_link(&self) -> Result<LinkPairingData> {
-        let payload = self.create_pairing_payload();
+        let payload = self.create_pairing_payload().await;
         let mechanism = PairingLinkMechanism::default();
         let raw = mechanism
             .generate_payload(&payload)

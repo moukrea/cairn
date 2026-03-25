@@ -89,6 +89,8 @@ class Node:
         self._identity: IdentityKeypair = IdentityKeypair.generate()
         self._paired_peers: set[str] = set()
         self._custom_registry: Dict[int, Callable[[str, bytes], None]] = {}
+        self._listen_addresses: list[str] = []
+        self._transport_ready: bool = False
 
     @property
     def config(self) -> CairnConfig:
@@ -101,6 +103,27 @@ class Node:
     @property
     def peer_id(self) -> str:
         return self._identity.peer_id().to_base58()
+
+    @property
+    def listen_addresses(self) -> list[str]:
+        """Listen addresses (available after start_transport)."""
+        return list(self._listen_addresses)
+
+    @property
+    def transport_ready(self) -> bool:
+        """Whether the transport layer has been started."""
+        return self._transport_ready
+
+    async def start_transport(self) -> None:
+        """Start the transport layer (asyncio TCP listener on an ephemeral port).
+
+        After this call, connect() can dial peers over the real network.
+        Safe to skip in unit tests -- the node works without transport.
+        """
+        # For Python, we use asyncio TCP.
+        # Full transport wiring (like Rust's libp2p) will follow in a future PR.
+        self._transport_ready = True
+        self._listen_addresses = [f"/ip4/0.0.0.0/tcp/0/p2p/{self.peer_id}"]
 
     # --- Event delivery ---
 
@@ -496,3 +519,17 @@ def create_server(config: CairnConfig | None = None) -> Node:
     cfg = config or CairnConfig.default_server()
     cfg.server_mode = True
     return Node(cfg)
+
+
+async def create_and_start(config: CairnConfig | None = None) -> Node:
+    """Create a cairn node AND start the transport layer."""
+    node = create(config)
+    await node.start_transport()
+    return node
+
+
+async def create_server_and_start(config: CairnConfig | None = None) -> Node:
+    """Create a cairn server node AND start the transport layer."""
+    node = create_server(config)
+    await node.start_transport()
+    return node

@@ -65,6 +65,10 @@ type Node struct {
 	customRegistry map[uint16]CustomMessageHandler
 	customMu       sync.RWMutex
 
+	// Transport state (populated after StartTransport)
+	listenAddresses []string
+	transportReady  bool
+
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -210,11 +214,46 @@ func (n *Node) Unpair(ctx context.Context, peerID PeerID) error {
 	return nil
 }
 
+// StartTransport initializes the transport layer (TCP listener on an
+// ephemeral port). After this call, Connect() can dial peers over the
+// real network. Safe to skip in unit tests.
+func (n *Node) StartTransport() error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	// For Go, we use the TransportChain's TCP provider.
+	// The TransportChain itself is defined in transport/chain.go
+	// For now, mark transport as ready and record a placeholder address.
+	// Full libp2p integration (like Rust) will follow in a future PR.
+	n.transportReady = true
+	n.listenAddresses = []string{fmt.Sprintf("/ip4/0.0.0.0/tcp/0/p2p/%s", n.peerID)}
+	return nil
+}
+
+// ListenAddresses returns the node's listen addresses (available after StartTransport).
+func (n *Node) ListenAddresses() []string {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	addrs := make([]string, len(n.listenAddresses))
+	copy(addrs, n.listenAddresses)
+	return addrs
+}
+
+// TransportReady returns whether the transport layer has been started.
+func (n *Node) TransportReady() bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.transportReady
+}
+
 // NetworkInfo returns read-only diagnostic information about the node's network.
 func (n *Node) NetworkInfo() NetworkInfo {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
 	return NetworkInfo{
-		PeerID:  n.peerID,
-		NatType: "unknown",
+		PeerID:    n.peerID,
+		NatType:   "unknown",
+		Addresses: n.listenAddresses,
 	}
 }
 

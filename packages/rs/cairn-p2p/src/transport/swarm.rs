@@ -72,6 +72,18 @@ pub(crate) enum SwarmCommand {
         addr: Multiaddr,
         reply: oneshot::Sender<Result<()>>,
     },
+    /// Send a request to a connected peer via the request-response protocol.
+    SendRequest {
+        peer_id: PeerId,
+        data: Vec<u8>,
+        reply: oneshot::Sender<Result<libp2p::request_response::OutboundRequestId>>,
+    },
+    /// Send a response to an inbound request.
+    SendResponse {
+        request_id: libp2p::request_response::InboundRequestId,
+        data: Vec<u8>,
+        reply: oneshot::Sender<Result<()>>,
+    },
     /// Store a record in the Kademlia DHT.
     KadPutRecord {
         key: Vec<u8>,
@@ -145,6 +157,46 @@ impl SwarmController {
             .map_err(|_| CairnError::Transport("swarm event loop dropped reply".into()))?
     }
 
+    /// Send a request to a connected peer via the request-response protocol.
+    pub async fn send_request(
+        &self,
+        peer_id: PeerId,
+        data: Vec<u8>,
+    ) -> Result<libp2p::request_response::OutboundRequestId> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.command_tx
+            .send(SwarmCommand::SendRequest {
+                peer_id,
+                data,
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop shut down".into()))?;
+        reply_rx
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop dropped reply".into()))?
+    }
+
+    /// Send a response to an inbound request.
+    pub async fn send_response(
+        &self,
+        request_id: libp2p::request_response::InboundRequestId,
+        data: Vec<u8>,
+    ) -> Result<()> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.command_tx
+            .send(SwarmCommand::SendResponse {
+                request_id,
+                data,
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop shut down".into()))?;
+        reply_rx
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop dropped reply".into()))?
+    }
+
     /// Gracefully shut down the swarm event loop.
     pub async fn shutdown(&self) -> Result<()> {
         self.command_tx
@@ -170,6 +222,26 @@ impl SwarmController {
 }
 
 impl SwarmCommandSender {
+    /// Send a request to a connected peer via the request-response protocol.
+    pub async fn send_request(
+        &self,
+        peer_id: PeerId,
+        data: Vec<u8>,
+    ) -> Result<libp2p::request_response::OutboundRequestId> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.command_tx
+            .send(SwarmCommand::SendRequest {
+                peer_id,
+                data,
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop shut down".into()))?;
+        reply_rx
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop dropped reply".into()))?
+    }
+
     /// Store a record in the Kademlia DHT via the composed swarm.
     pub async fn kad_put_record(&self, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
         let (reply_tx, reply_rx) = oneshot::channel();
@@ -462,6 +534,12 @@ async fn run_event_loop(
     let mut pending_kad_gets: std::collections::HashMap<libp2p::kad::QueryId, KadGetReply> =
         std::collections::HashMap::new();
 
+    // Pending inbound request-response channels for deferred responses.
+    let mut pending_inbound_requests: std::collections::HashMap<
+        libp2p::request_response::InboundRequestId,
+        libp2p::request_response::ResponseChannel<Vec<u8>>,
+    > = std::collections::HashMap::new();
+
     loop {
         tokio::select! {
             cmd = command_rx.recv() => {
@@ -482,6 +560,33 @@ async fn run_event_loop(
                                 CairnError::Transport(format!("dial failed: {e}"))
                             });
                         let _ = reply.send(result);
+                    }
+                    Some(SwarmCommand::SendRequest { peer_id, data, reply }) => {
+                        let request_id = swarm
+                            .behaviour_mut()
+                            .request_response
+                            .send_request(&peer_id, data);
+                        let _ = reply.send(Ok(request_id));
+                    }
+                    Some(SwarmCommand::SendResponse { request_id, data, reply }) => {
+                        // The request-response behaviour keeps pending inbound
+                        // requests in its internal state. We need to retrieve
+                        // the response channel for this request_id.
+                        // Note: libp2p request_response sends response via the
+                        // channel stored during Event::Message::Request.
+                        // We store these channels in pending_inbound_requests.
+                        if let Some(channel) = pending_inbound_requests.remove(&request_id) {
+                            let result = swarm
+                                .behaviour_mut()
+                                .request_response
+                                .send_response(channel, data)
+                                .map_err(|_| CairnError::Transport("failed to send response".into()));
+                            let _ = reply.send(result);
+                        } else {
+                            let _ = reply.send(Err(CairnError::Transport(
+                                "no pending inbound request for this ID".into(),
+                            )));
+                        }
                     }
                     Some(SwarmCommand::KadPutRecord { key, value, reply }) => {
                         let record_key = libp2p::kad::RecordKey::new(&key);
@@ -651,9 +756,11 @@ async fn run_event_loop(
                             libp2p::request_response::Message::Request {
                                 request_id,
                                 request,
-                                ..
+                                channel,
                             } => {
                                 debug!(%peer, ?request_id, "received request");
+                                // Store the response channel for deferred SendResponse
+                                pending_inbound_requests.insert(request_id, channel);
                                 Some(SwarmEvent::RequestReceived {
                                     peer_id: peer,
                                     request_id,
