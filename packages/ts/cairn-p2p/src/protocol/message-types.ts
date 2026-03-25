@@ -6,6 +6,12 @@ export const PAIR_CONFIRM = 0x0103;
 export const PAIR_REJECT = 0x0104;
 export const PAIR_REVOKE = 0x0105;
 
+// Handshake (0x01Ex) — Noise XX over transport
+export const HANDSHAKE_INIT = 0x01e0;
+export const HANDSHAKE_RESPONSE = 0x01e1;
+export const HANDSHAKE_FINISH = 0x01e2;
+export const HANDSHAKE_ACK = 0x01e3;
+
 // Session (0x02xx)
 export const SESSION_RESUME = 0x0200;
 export const SESSION_RESUME_ACK = 0x0201;
@@ -71,4 +77,11 @@ export function messageCategory(msgType: number): string {
  */
 export function isApplicationType(msgType: number): boolean {
   return msgType >= APP_EXTENSION_START && msgType <= APP_EXTENSION_END;
+}
+
+/**
+ * Returns true if the given type code is a Noise XX handshake message.
+ */
+export function isHandshakeType(msgType: number): boolean {
+  return msgType >= HANDSHAKE_INIT && msgType <= HANDSHAKE_ACK;
 }

@@ -43,4 +43,9 @@ export {
   createCairnNode,
   BROWSER_TRANSPORT_CHAIN,
   NODEJS_TRANSPORT_CHAIN,
+  CAIRN_PROTOCOL,
+  encodeFrame,
+  decodeFrame,
+  readFrame,
+  writeFrame,
 } from './libp2p-node.js';

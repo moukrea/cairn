@@ -30,7 +30,14 @@ import type { PairingPayload } from './pairing/payload.js';
 import { generateNonce } from './pairing/payload.js';
 import { encodeEnvelope, decodeEnvelope, newMsgId } from './protocol/envelope.js';
 import type { MessageEnvelope } from './protocol/envelope.js';
-import { DATA_MESSAGE } from './protocol/message-types.js';
+import {
+  DATA_MESSAGE,
+  HANDSHAKE_INIT,
+  HANDSHAKE_RESPONSE,
+  HANDSHAKE_FINISH,
+  HANDSHAKE_ACK,
+  isHandshakeType,
+} from './protocol/message-types.js';
 import { MessageQueue } from './session/message-queue.js';
 import type { EnqueueResult } from './session/message-queue.js';
 import type { ConnectionHint } from './pairing/payload.js';
@@ -122,8 +129,25 @@ export class NodeSession {
   private _sequenceCounter = 0;
   /** Outbox of encoded envelopes (transport would drain this). */
   readonly outbox: Uint8Array[] = [];
+  /** Reference to the libp2p node for sending (null if no transport). */
+  private _libp2pNode: any = null;
+  /** The remote peer's libp2p PeerId (null if no transport). */
+  private _remotePeerId: any = null;
+  /** Guard to prevent concurrent outbox drains. */
+  private _draining = false;
 
   constructor(readonly peerId: string) {}
+
+  /** Wire this session to a libp2p node and remote PeerId for transport. */
+  _setTransport(libp2pNode: any, remotePeerId: any): void {
+    this._libp2pNode = libp2pNode;
+    this._remotePeerId = remotePeerId;
+  }
+
+  /** Whether this session has a live transport connection. */
+  get hasTransport(): boolean {
+    return this._libp2pNode !== null && this._remotePeerId !== null;
+  }
 
   /** Get the current connection state. */
   get state(): ConnectionState {
@@ -210,6 +234,50 @@ export class NodeSession {
 
     const encoded = encodeEnvelope(envelope);
     this.outbox.push(encoded);
+
+    // If transport is wired, drain the outbox via libp2p
+    if (this._libp2pNode && this._remotePeerId) {
+      this._drainOutbox().catch(() => {
+        // Silently drop transport errors — messages remain in outbox for retry
+      });
+    }
+  }
+
+  /**
+   * Drain the outbox by sending each envelope as a length-prefixed frame
+   * over a new libp2p stream using the cairn protocol.
+   */
+  private async _drainOutbox(): Promise<void> {
+    if (this._draining) return;
+    this._draining = true;
+    try {
+      const { CAIRN_PROTOCOL, encodeFrame, readFrame } = await import('./transport/libp2p-node.js');
+      while (this.outbox.length > 0) {
+        const envelopeBytes = this.outbox.shift()!;
+        try {
+          const stream = await this._libp2pNode.dialProtocol(this._remotePeerId, CAIRN_PROTOCOL);
+          const frame = encodeFrame(envelopeBytes);
+
+          // Write the frame and close the write side
+          await stream.sink((async function* () {
+            yield frame;
+          })());
+
+          // Read the response (even if empty, to complete the request-response cycle)
+          try {
+            await readFrame(stream.source);
+          } catch {
+            // Response may be empty for data messages
+          }
+        } catch {
+          // Put envelope back at front if send fails
+          this.outbox.unshift(envelopeBytes);
+          break;
+        }
+      }
+    } finally {
+      this._draining = false;
+    }
   }
 
   /** Register a callback for incoming messages on a channel. */
@@ -343,6 +411,11 @@ export class Node {
   private _listenAddresses: string[] = [];
   /** Connection hints from pairing, keyed by peer ID hex string. */
   private readonly _peerHints = new Map<string, ConnectionHint[]>();
+  /**
+   * In-progress inbound handshakes, keyed by remote libp2p PeerId string.
+   * Stores the Noise responder and X25519 DH keypair from round 1.
+   */
+  private readonly _inboundHandshakes = new Map<string, { responder: NoiseXXHandshake; dhKeypair: X25519Keypair }>();
 
   private constructor(config: ResolvedConfig) {
     this._config = config;
@@ -403,19 +476,54 @@ export class Node {
    *
    * Creates a libp2p node with environment-appropriate transports
    * (WebRTC + WebSocket in browser, TCP + WebSocket in Node.js),
-   * starts listening, and populates listen addresses.
+   * starts listening, registers the cairn protocol handler,
+   * and populates listen addresses.
    *
    * Safe to skip in unit tests — the node works without transport.
    */
   async startTransport(): Promise<void> {
-    const { createCairnNode } = await import("./transport/libp2p-node.js");
+    const { createCairnNode, CAIRN_PROTOCOL, encodeFrame, readFrame } = await import("./transport/libp2p-node.js");
     const libp2pNode = await createCairnNode();
     await libp2pNode.start();
     this._libp2pNode = libp2pNode;
 
+    // Register the cairn protocol handler for incoming streams
+    libp2pNode.handle(CAIRN_PROTOCOL, async (data: { stream: any; connection: any }) => {
+      const { stream, connection } = data;
+      const remotePeerIdStr = connection.remotePeer.toString();
+
+      try {
+        // Read the incoming request frame
+        const requestBytes = await readFrame(stream.source);
+        const requestEnv = decodeEnvelope(requestBytes);
+
+        if (requestEnv.type === HANDSHAKE_INIT) {
+          // --- Inbound handshake round 1 ---
+          await this._handleHandshakeInit(requestEnv, remotePeerIdStr, stream);
+        } else if (requestEnv.type === HANDSHAKE_FINISH) {
+          // --- Inbound handshake round 2 ---
+          await this._handleHandshakeFinish(requestEnv, remotePeerIdStr, stream, connection.remotePeer);
+        } else if (requestEnv.type === DATA_MESSAGE || !isHandshakeType(requestEnv.type)) {
+          // --- Regular data message ---
+          const session = this._sessions.get(remotePeerIdStr);
+          if (session) {
+            session.dispatchIncoming(requestBytes);
+          }
+          // Send empty ACK response to complete the stream
+          const ackFrame = encodeFrame(new Uint8Array(0));
+          await stream.sink((async function* () {
+            yield ackFrame;
+          })());
+        }
+      } catch {
+        // Protocol error — close stream silently
+        try { await stream.close(); } catch { /* ignore */ }
+      }
+    });
+
     // Collect listen addresses
     const addrs = libp2pNode.getMultiaddrs();
-    this._listenAddresses = addrs.map(a => a.toString());
+    this._listenAddresses = addrs.map((a: any) => a.toString());
   }
 
   /** Get the libp2p node (null if transport not started). */
@@ -657,6 +765,218 @@ export class Node {
     this._natType = natType;
   }
 
+  // --- Transport handshake methods ---
+
+  /**
+   * Connect to a remote peer over the transport layer (libp2p).
+   *
+   * Performs a 2-round Noise XX handshake over the cairn protocol,
+   * creates a session with a matching Double Ratchet, and returns it.
+   *
+   * Requires `startTransport()` to have been called first.
+   *
+   * @param remotePeerId - The remote peer's libp2p PeerId string
+   * @param addrs - Multiaddr strings for the remote peer
+   */
+  async connectTransport(remotePeerId: string, addrs: string[]): Promise<NodeSession> {
+    if (!this._libp2pNode) {
+      throw new CairnError('TRANSPORT', 'transport not started');
+    }
+    if (!this._identity) {
+      throw new CairnError('PROTOCOL', 'node identity not initialized');
+    }
+
+    const { multiaddr } = await import('@multiformats/multiaddr');
+    const { peerIdFromString } = await import('@libp2p/peer-id');
+    const { CAIRN_PROTOCOL, encodeFrame, readFrame } = await import('./transport/libp2p-node.js');
+
+    const remotePid = peerIdFromString(remotePeerId);
+
+    // Dial the remote peer — stop after first successful address.
+    let connected = false;
+    for (const addrStr of addrs) {
+      try {
+        const ma = multiaddr(addrStr);
+        await this._libp2pNode.dial(ma);
+        connected = true;
+        break;
+      } catch {
+        // Try next address
+      }
+    }
+    if (!connected) {
+      throw new CairnError('TRANSPORT', `could not dial any address for peer ${remotePeerId}`);
+    }
+
+    // --- Handshake round 1: INIT -> RESPONSE ---
+    const initiator = new NoiseXXHandshake('initiator', this._identity);
+    const out1 = initiator.step();
+    if (out1.type !== 'send_message') {
+      throw new CairnError('CRYPTO', 'unexpected handshake state at msg1');
+    }
+
+    const initEnvelope: MessageEnvelope = {
+      version: 1,
+      type: HANDSHAKE_INIT,
+      msgId: newMsgId(),
+      payload: out1.data,
+    };
+
+    // Send INIT, read RESPONSE
+    const stream1 = await this._libp2pNode.dialProtocol(remotePid, CAIRN_PROTOCOL);
+    const initFrame = encodeFrame(encodeEnvelope(initEnvelope));
+    await stream1.sink((async function* () {
+      yield initFrame;
+    })());
+
+    const responseBytes = await readFrame(stream1.source);
+    const responseEnv = decodeEnvelope(responseBytes);
+
+    if (responseEnv.type !== HANDSHAKE_RESPONSE) {
+      throw new CairnError('PROTOCOL', `expected HANDSHAKE_RESPONSE (0x01e1), got 0x${responseEnv.type.toString(16).padStart(4, '0')}`);
+    }
+
+    // Extract responder's DH public key from auth_tag
+    if (!responseEnv.authTag) {
+      throw new CairnError('PROTOCOL', 'HANDSHAKE_RESPONSE missing DH public key');
+    }
+    if (responseEnv.authTag.length !== 32) {
+      throw new CairnError('PROTOCOL', 'DH public key must be 32 bytes');
+    }
+    const dhPublicBytes = responseEnv.authTag;
+
+    // Process Noise msg2, produce msg3
+    const out3 = initiator.step(responseEnv.payload);
+    if (out3.type !== 'send_message') {
+      throw new CairnError('CRYPTO', 'unexpected handshake state at msg3');
+    }
+
+    // --- Handshake round 2: FINISH -> ACK ---
+    const finishEnvelope: MessageEnvelope = {
+      version: 1,
+      type: HANDSHAKE_FINISH,
+      msgId: newMsgId(),
+      payload: out3.data,
+    };
+
+    const stream2 = await this._libp2pNode.dialProtocol(remotePid, CAIRN_PROTOCOL);
+    const finishFrame = encodeFrame(encodeEnvelope(finishEnvelope));
+    await stream2.sink((async function* () {
+      yield finishFrame;
+    })());
+
+    const ackBytes = await readFrame(stream2.source);
+    const ackEnv = decodeEnvelope(ackBytes);
+
+    if (ackEnv.type !== HANDSHAKE_ACK) {
+      throw new CairnError('PROTOCOL', `expected HANDSHAKE_ACK (0x01e3), got 0x${ackEnv.type.toString(16).padStart(4, '0')}`);
+    }
+
+    // Handshake complete -- derive session key and create ratchet
+    const hsResult = initiator.getResult();
+    const ratchet = DoubleRatchet.initSender(hsResult.sessionKey, dhPublicBytes);
+
+    const session = new NodeSession(remotePeerId);
+    session._setRatchet(ratchet);
+    session._setTransport(this._libp2pNode, remotePid);
+    this._sessions.set(remotePeerId, session);
+    return session;
+  }
+
+  /**
+   * Handle an inbound HANDSHAKE_INIT message (round 1 of the handshake).
+   * Creates a Noise responder, processes msg1, sends HANDSHAKE_RESPONSE with
+   * the DH public key in the auth_tag field.
+   */
+  private async _handleHandshakeInit(
+    requestEnv: MessageEnvelope,
+    remotePeerIdStr: string,
+    stream: any,
+  ): Promise<void> {
+    if (!this._identity) {
+      throw new CairnError('PROTOCOL', 'node identity not initialized');
+    }
+
+    const { encodeFrame } = await import('./transport/libp2p-node.js');
+
+    const responder = new NoiseXXHandshake('responder', this._identity);
+    const out2 = responder.step(requestEnv.payload);
+    if (out2.type !== 'send_message') {
+      throw new CairnError('CRYPTO', 'unexpected handshake state at msg2');
+    }
+
+    // Generate DH keypair for Double Ratchet
+    const dhKeypair = X25519Keypair.generate();
+
+    const responseEnv: MessageEnvelope = {
+      version: 1,
+      type: HANDSHAKE_RESPONSE,
+      msgId: newMsgId(),
+      payload: out2.data,
+      authTag: dhKeypair.publicKeyBytes(),
+    };
+
+    const responseFrame = encodeFrame(encodeEnvelope(responseEnv));
+    await stream.sink((async function* () {
+      yield responseFrame;
+    })());
+
+    // Store handshake state for round 2
+    this._inboundHandshakes.set(remotePeerIdStr, { responder, dhKeypair });
+  }
+
+  /**
+   * Handle an inbound HANDSHAKE_FINISH message (round 2 of the handshake).
+   * Completes the Noise handshake, creates a session with Double Ratchet,
+   * and sends HANDSHAKE_ACK.
+   */
+  private async _handleHandshakeFinish(
+    requestEnv: MessageEnvelope,
+    remotePeerIdStr: string,
+    stream: any,
+    remotePeerId: any,
+  ): Promise<void> {
+    const { encodeFrame } = await import('./transport/libp2p-node.js');
+
+    const hsEntry = this._inboundHandshakes.get(remotePeerIdStr);
+    if (!hsEntry) {
+      throw new CairnError('PROTOCOL', 'no pending handshake for this peer');
+    }
+    this._inboundHandshakes.delete(remotePeerIdStr);
+
+    const { responder, dhKeypair } = hsEntry;
+    const out = responder.step(requestEnv.payload);
+    if (out.type !== 'complete') {
+      throw new CairnError('CRYPTO', 'expected handshake completion at msg3');
+    }
+
+    // Create session with Double Ratchet (responder/receiver side)
+    const ratchet = DoubleRatchet.initReceiver(out.result.sessionKey, dhKeypair);
+
+    const session = new NodeSession(remotePeerIdStr);
+    session._setRatchet(ratchet);
+    session._setTransport(this._libp2pNode, remotePeerId);
+    this._sessions.set(remotePeerIdStr, session);
+
+    // Send ACK
+    const ackEnv: MessageEnvelope = {
+      version: 1,
+      type: HANDSHAKE_ACK,
+      msgId: newMsgId(),
+      payload: new Uint8Array(0),
+    };
+
+    const ackFrame = encodeFrame(encodeEnvelope(ackEnv));
+    await stream.sink((async function* () {
+      yield ackFrame;
+    })());
+  }
+
+  /** Get a session by peer ID string (for testing). */
+  getSession(peerId: string): NodeSession | undefined {
+    return this._sessions.get(peerId);
+  }
+
   /** Close the node and all sessions. */
   async close(): Promise<void> {
     this._closed = true;
@@ -664,6 +984,9 @@ export class Node {
       session.close();
     }
     this._sessions.clear();
+    if (this._libp2pNode) {
+      try { await this._libp2pNode.stop(); } catch { /* ignore */ }
+    }
   }
 }
 
