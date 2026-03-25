@@ -341,6 +341,8 @@ export class Node {
   private _libp2pNode: any = null;
   /** Listen addresses reported by the libp2p node. */
   private _listenAddresses: string[] = [];
+  /** Connection hints from pairing, keyed by peer ID hex string. */
+  private readonly _peerHints = new Map<string, ConnectionHint[]>();
 
   private constructor(config: ResolvedConfig) {
     this._config = config;
@@ -551,6 +553,10 @@ export class Node {
     const payload = consumeQrPayload(data);
     this._runPairingExchange(payload.pakeCredential);
     const remotePeerId = bytesToHex(payload.peerId);
+    // Store connection hints from the remote peer for later dialing
+    if (payload.hints && payload.hints.length > 0) {
+      this._peerHints.set(remotePeerId, payload.hints);
+    }
     this._completePairing(remotePeerId);
     return remotePeerId;
   }
@@ -593,8 +599,36 @@ export class Node {
 
   // --- Connection methods ---
 
-  /** Connect to a paired peer. Performs Noise XX handshake and Double Ratchet init. */
+  /** Connect to a paired peer. Dials via libp2p if transport is started, falls back to in-memory handshake. */
   async connect(peerId: string, _options?: { signal?: AbortSignal }): Promise<NodeSession> {
+    // If transport is started AND we have connection hints, dial via libp2p
+    if (this._libp2pNode && this._peerHints.has(peerId)) {
+      const hints = this._peerHints.get(peerId)!;
+      const { multiaddr } = await import('@multiformats/multiaddr');
+
+      // Try each hint address until one works (prefer /ws for browser compat)
+      const wsHints = hints.filter(h => h.hintType === 'multiaddr' && h.value.includes('/ws'));
+      const tcpHints = hints.filter(h => h.hintType === 'multiaddr' && h.value.includes('/tcp/') && !h.value.includes('/ws'));
+      const allHints = [...wsHints, ...tcpHints];
+
+      let connected = false;
+      for (const hint of allHints) {
+        try {
+          const ma = multiaddr(hint.value);
+          await this._libp2pNode.dial(ma);
+          connected = true;
+          break;
+        } catch {
+          // Try next address
+        }
+      }
+
+      if (!connected && allHints.length > 0) {
+        throw new CairnError('TRANSPORT', `failed to connect to peer ${peerId} via any address`);
+      }
+    }
+
+    // Perform crypto handshake (in-memory for now — will be over libp2p stream in future)
     const handshakeResult = await this._performNoiseHandshake();
     const bobDh = X25519Keypair.generate();
     const ratchet = DoubleRatchet.initSender(handshakeResult.sessionKey, bobDh.publicKeyBytes());
