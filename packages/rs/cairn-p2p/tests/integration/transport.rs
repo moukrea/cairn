@@ -29,10 +29,7 @@ async fn node_without_transport_has_no_addresses() {
 async fn pairing_payload_includes_connection_hints() {
     let node = create_and_start().await.unwrap();
     let qr = node.pair_generate_qr().await.unwrap();
-    assert!(
-        !qr.payload.is_empty(),
-        "QR payload should not be empty"
-    );
+    assert!(!qr.payload.is_empty(), "QR payload should not be empty");
     // Payload with connection hints should be larger than a bare payload
     assert!(
         qr.payload.len() > 50,

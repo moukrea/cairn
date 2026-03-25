@@ -39,6 +39,6 @@ pub type Channel = ApiChannel;
 
 // Factory functions (spec section 3.2).
 pub use config::{
-    create, create_and_start, create_and_start_with_config, create_server,
-    create_server_and_start, create_server_with_config, create_with_config,
+    create, create_and_start, create_and_start_with_config, create_server, create_server_and_start,
+    create_server_with_config, create_with_config,
 };

@@ -158,11 +158,8 @@ impl ApiNode {
         let mut addrs = Vec::new();
         // Drain the initial ListeningOn events (2 expected: TCP + QUIC)
         for _ in 0..4 {
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(2),
-                controller.next_event(),
-            )
-            .await
+            match tokio::time::timeout(std::time::Duration::from_secs(2), controller.next_event())
+                .await
             {
                 Ok(Some(CairnSwarmEvent::ListeningOn { address })) => {
                     addrs.push(address.to_string());
@@ -206,9 +203,7 @@ impl ApiNode {
                             .await;
                     }
                     CairnSwarmEvent::RequestReceived {
-                        peer_id,
-                        request,
-                        ..
+                        peer_id, request, ..
                     } => {
                         // Route to the session for this peer
                         let peer_str = peer_id.to_string();
