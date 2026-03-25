@@ -6,6 +6,12 @@ pub const PAIR_CONFIRM: u16 = 0x0103;
 pub const PAIR_REJECT: u16 = 0x0104;
 pub const PAIR_REVOKE: u16 = 0x0105;
 
+// Handshake (0x01Ex) — Noise XX over transport
+pub const HANDSHAKE_INIT: u16 = 0x01E0;
+pub const HANDSHAKE_RESPONSE: u16 = 0x01E1;
+pub const HANDSHAKE_FINISH: u16 = 0x01E2;
+pub const HANDSHAKE_ACK: u16 = 0x01E3;
+
 // Session (0x02xx)
 pub const SESSION_RESUME: u16 = 0x0200;
 pub const SESSION_RESUME_ACK: u16 = 0x0201;

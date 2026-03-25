@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 
 use crate::config::CairnConfig;
 use crate::crypto::exchange::X25519Keypair;
@@ -61,6 +61,9 @@ pub struct ApiNode {
     swarm_sender: Option<SwarmCommandSender>,
     /// Listen addresses reported by the swarm after start_transport().
     listen_addresses: RwLock<Vec<String>>,
+    /// Pending handshake response waiters, keyed by remote libp2p PeerId string.
+    /// connect_transport() registers here; the event loop forwards ResponseReceived to it.
+    response_waiters: Arc<RwLock<HashMap<String, oneshot::Sender<Vec<u8>>>>>,
 }
 
 pub struct ConnectResult {
@@ -96,6 +99,7 @@ impl ApiNode {
             transport_connector: None,
             swarm_sender: None,
             listen_addresses: RwLock::new(Vec::new()),
+            response_waiters: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -129,6 +133,20 @@ impl ApiNode {
         self.swarm_sender.as_ref()
     }
 
+    /// Get a snapshot of all active sessions, keyed by remote peer ID string.
+    pub async fn sessions(&self) -> HashMap<String, ApiSession> {
+        self.sessions.read().await.clone()
+    }
+
+    /// The node's libp2p PeerId (derived from the Ed25519 identity keypair).
+    /// Returns None if the identity cannot be converted to a libp2p keypair.
+    pub fn libp2p_peer_id(&self) -> Option<libp2p::PeerId> {
+        let secret = self.identity.secret_bytes();
+        libp2p::identity::Keypair::ed25519_from_bytes(secret)
+            .ok()
+            .map(|kp| kp.public().to_peer_id())
+    }
+
     /// Get the node's listen addresses (available after start_transport).
     pub async fn listen_addresses(&self) -> Vec<String> {
         self.listen_addresses.read().await.clone()
@@ -143,20 +161,34 @@ impl ApiNode {
     ///
     /// Safe to skip in unit tests — the node works without transport (in-memory mode).
     pub async fn start_transport(&mut self) -> Result<()> {
-        let transport_config = TransportConfig::default();
+        self.start_transport_with_config(TransportConfig::default())
+            .await
+    }
+
+    /// Start the transport layer with a custom configuration.
+    pub async fn start_transport_with_config(
+        &mut self,
+        transport_config: TransportConfig,
+    ) -> Result<()> {
+        let transport_config = transport_config;
         let mut controller = build_swarm(&self.identity, &transport_config).await?;
 
-        // Listen on TCP, QUIC, and WebSocket on ephemeral ports.
-        // WebSocket is critical for browser clients which cannot use TCP/QUIC.
-        controller
-            .listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap())
-            .await?;
-        controller
-            .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap())
-            .await?;
-        controller
-            .listen_on("/ip4/0.0.0.0/tcp/0/ws".parse().unwrap())
-            .await?;
+        // Listen on enabled transports with ephemeral ports.
+        if transport_config.tcp_enabled {
+            controller
+                .listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap())
+                .await?;
+        }
+        if transport_config.quic_enabled {
+            controller
+                .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap())
+                .await?;
+        }
+        if transport_config.websocket_enabled {
+            controller
+                .listen_on("/ip4/0.0.0.0/tcp/0/ws".parse().unwrap())
+                .await?;
+        }
 
         // Collect initial listen addresses.
         // TCP binds fast but WebSocket takes longer — keep draining
@@ -181,11 +213,22 @@ impl ApiNode {
         *self.listen_addresses.write().await = addrs;
 
         let sender = controller.command_sender();
+        let sender_for_loop = sender.clone();
         self.swarm_sender = Some(sender);
 
-        // Spawn background task to bridge swarm events → node events
+        // Spawn background task to bridge swarm events → node events.
+        // Also handles inbound handshake requests from remote peers.
         let event_tx = self.event_tx.clone();
         let sessions = self.sessions.clone();
+        let response_waiters = self.response_waiters.clone();
+        let identity_secret = self.identity.secret_bytes();
+
+        // In-progress inbound handshakes, keyed by remote libp2p PeerId string.
+        // Stores the Noise responder state and the DH keypair between rounds.
+        let inbound_handshakes: Arc<
+            RwLock<HashMap<String, (NoiseXXHandshake, X25519Keypair)>>,
+        > = Arc::new(RwLock::new(HashMap::new()));
+
         tokio::spawn(async move {
             while let Some(event) = controller.next_event().await {
                 match event {
@@ -214,31 +257,190 @@ impl ApiNode {
                             .await;
                     }
                     CairnSwarmEvent::RequestReceived {
-                        peer_id, request, ..
+                        peer_id,
+                        request_id,
+                        request,
                     } => {
-                        // Route to the session for this peer
                         let peer_str = peer_id.to_string();
-                        let sessions_guard = sessions.read().await;
-                        if let Some(session) = sessions_guard.get(&peer_str) {
-                            session.dispatch_incoming(&request).await.ok();
-                        } else {
-                            // No session yet — deliver as raw MessageReceived
-                            let _ = event_tx
-                                .send(Event::MessageReceived {
-                                    peer_id: peer_str,
-                                    channel: "rpc".to_string(),
-                                    data: request,
-                                })
-                                .await;
+
+                        // Try to decode as a cairn protocol envelope to detect
+                        // handshake messages vs regular data.
+                        let envelope = MessageEnvelope::decode(&request);
+
+                        match envelope {
+                            Ok(env)
+                                if env.msg_type == message_types::HANDSHAKE_INIT =>
+                            {
+                                // --- Inbound handshake round 1 ---
+                                let identity =
+                                    IdentityKeypair::from_bytes(&identity_secret);
+                                let mut responder =
+                                    NoiseXXHandshake::new(Role::Responder, identity);
+
+                                let msg2 = match responder.step(Some(&env.payload)) {
+                                    Ok(StepOutput::SendMessage(m)) => m,
+                                    _ => {
+                                        // Handshake failed — send empty error response
+                                        let _ = sender_for_loop
+                                            .send_response(request_id, vec![])
+                                            .await;
+                                        continue;
+                                    }
+                                };
+
+                                // Generate DH keypair for Double Ratchet.
+                                // Responder's public key is sent to initiator
+                                // in the response so both can derive matching ratchets.
+                                let dh_kp = X25519Keypair::generate();
+                                let dh_pub = dh_kp.public_key().as_bytes().to_vec();
+
+                                let response_env = MessageEnvelope {
+                                    version: 1,
+                                    msg_type: message_types::HANDSHAKE_RESPONSE,
+                                    msg_id: new_msg_id(),
+                                    session_id: None,
+                                    payload: msg2,
+                                    auth_tag: Some(dh_pub),
+                                };
+                                if let Ok(bytes) = response_env.encode() {
+                                    let _ = sender_for_loop
+                                        .send_response(request_id, bytes)
+                                        .await;
+                                }
+
+                                // Store handshake state for round 2
+                                inbound_handshakes
+                                    .write()
+                                    .await
+                                    .insert(peer_str, (responder, dh_kp));
+                            }
+                            Ok(env)
+                                if env.msg_type == message_types::HANDSHAKE_FINISH =>
+                            {
+                                // --- Inbound handshake round 2 ---
+                                let hs_entry = inbound_handshakes
+                                    .write()
+                                    .await
+                                    .remove(&peer_str);
+
+                                if let Some((mut responder, dh_kp)) = hs_entry {
+                                    match responder.step(Some(&env.payload)) {
+                                        Ok(StepOutput::Complete(hs_result)) => {
+                                            // Handshake complete — create session
+                                            {
+                                                let ratchet_result =
+                                                    DoubleRatchet::init_responder(
+                                                        hs_result.session_key,
+                                                        dh_kp,
+                                                        RatchetConfig::default(),
+                                                    );
+                                                if let Ok(ratchet) = ratchet_result {
+                                                    let session_id = SessionId::new();
+                                                    let (sm, _) =
+                                                        SessionStateMachine::new(
+                                                            session_id,
+                                                            SessionState::Connected,
+                                                        );
+                                                    let session =
+                                                        ApiSession::with_crypto(
+                                                            peer_str.clone(),
+                                                            event_tx.clone(),
+                                                            Some(Arc::new(
+                                                                RwLock::new(ratchet),
+                                                            )),
+                                                            Some(Arc::new(
+                                                                RwLock::new(sm),
+                                                            )),
+                                                        )
+                                                        .with_session_id(session_id)
+                                                        .with_swarm(
+                                                            sender_for_loop.clone(),
+                                                            peer_id,
+                                                        );
+
+                                                    sessions.write().await.insert(
+                                                        peer_str.clone(),
+                                                        session,
+                                                    );
+
+                                                    // Send ACK
+                                                    let ack = MessageEnvelope {
+                                                        version: 1,
+                                                        msg_type:
+                                                            message_types::HANDSHAKE_ACK,
+                                                        msg_id: new_msg_id(),
+                                                        session_id: None,
+                                                        payload: vec![],
+                                                        auth_tag: None,
+                                                    };
+                                                    if let Ok(bytes) = ack.encode() {
+                                                        let _ = sender_for_loop
+                                                            .send_response(
+                                                                request_id, bytes,
+                                                            )
+                                                            .await;
+                                                    }
+
+                                                    let _ = event_tx
+                                                        .send(Event::StateChanged {
+                                                            peer_id: peer_str,
+                                                            state:
+                                                                ConnectionState::Connected,
+                                                        })
+                                                        .await;
+                                                }
+                                            }
+                                        }
+                                        _ => {
+                                            let _ = sender_for_loop
+                                                .send_response(request_id, vec![])
+                                                .await;
+                                        }
+                                    }
+                                } else {
+                                    // No pending handshake for this peer
+                                    let _ = sender_for_loop
+                                        .send_response(request_id, vec![])
+                                        .await;
+                                }
+                            }
+                            _ => {
+                                // Regular data message — route to session
+                                let sessions_guard = sessions.read().await;
+                                if let Some(session) = sessions_guard.get(&peer_str) {
+                                    session
+                                        .dispatch_incoming(&request)
+                                        .await
+                                        .ok();
+                                } else {
+                                    let _ = event_tx
+                                        .send(Event::MessageReceived {
+                                            peer_id: peer_str,
+                                            channel: "rpc".to_string(),
+                                            data: request,
+                                        })
+                                        .await;
+                                }
+                            }
                         }
                     }
                     CairnSwarmEvent::ResponseReceived {
                         peer_id, response, ..
                     } => {
                         let peer_str = peer_id.to_string();
-                        let sessions_guard = sessions.read().await;
-                        if let Some(session) = sessions_guard.get(&peer_str) {
-                            session.dispatch_incoming(&response).await.ok();
+
+                        // Check if there's a pending handshake waiter for this peer
+                        // (connect_transport() on the initiator side).
+                        let waiter =
+                            response_waiters.write().await.remove(&peer_str);
+                        if let Some(tx) = waiter {
+                            let _ = tx.send(response);
+                        } else {
+                            // Route to session as regular data
+                            let sessions_guard = sessions.read().await;
+                            if let Some(session) = sessions_guard.get(&peer_str) {
+                                session.dispatch_incoming(&response).await.ok();
+                            }
                         }
                     }
                     CairnSwarmEvent::MdnsPeerDiscovered {
@@ -550,6 +752,174 @@ impl ApiNode {
         Ok(session)
     }
 
+    /// Connect to a remote peer over the libp2p transport.
+    ///
+    /// Dials the given multiaddrs, performs a Noise XX handshake over the
+    /// request-response protocol, and creates a session with a Double Ratchet.
+    ///
+    /// The `remote_peer_id` must be the libp2p PeerId string of the remote node
+    /// (available from `ApiNode::libp2p_peer_id()`). `addrs` are multiaddr
+    /// strings from the remote node's `listen_addresses()`.
+    ///
+    /// Requires `start_transport()` to have been called first.
+    pub async fn connect_transport(
+        &self,
+        remote_peer_id: &str,
+        addrs: &[String],
+    ) -> Result<ApiSession> {
+        let sender = self
+            .swarm_sender
+            .as_ref()
+            .ok_or_else(|| CairnError::Transport("transport not started".into()))?;
+
+        let remote_pid: libp2p::PeerId = remote_peer_id
+            .parse()
+            .map_err(|e| CairnError::Protocol(format!("invalid libp2p peer ID: {e}")))?;
+
+        // Dial the remote peer's addresses.
+        for addr_str in addrs {
+            if let Ok(addr) = addr_str.parse::<libp2p::Multiaddr>() {
+                let _ = sender.dial(addr).await;
+            }
+        }
+
+        // --- Handshake round 1: INIT → RESPONSE ---
+        let identity = IdentityKeypair::from_bytes(&self.identity.secret_bytes());
+        let mut initiator = NoiseXXHandshake::new(Role::Initiator, identity);
+        let msg1 = match initiator.step(None)? {
+            StepOutput::SendMessage(m) => m,
+            _ => {
+                return Err(CairnError::Crypto(
+                    "unexpected handshake state at msg1".into(),
+                ))
+            }
+        };
+
+        let init_envelope = MessageEnvelope {
+            version: 1,
+            msg_type: message_types::HANDSHAKE_INIT,
+            msg_id: new_msg_id(),
+            session_id: None,
+            payload: msg1,
+            auth_tag: None,
+        };
+
+        let (tx, rx) = oneshot::channel();
+        let remote_str = remote_pid.to_string();
+        self.response_waiters
+            .write()
+            .await
+            .insert(remote_str.clone(), tx);
+        sender
+            .send_request(remote_pid, init_envelope.encode()?)
+            .await?;
+
+        let response_bytes = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            rx,
+        )
+        .await
+        .map_err(|_| CairnError::Transport("handshake timed out waiting for response".into()))?
+        .map_err(|_| CairnError::Transport("handshake response waiter dropped".into()))?;
+
+        let response_env = MessageEnvelope::decode(&response_bytes)?;
+        if response_env.msg_type != message_types::HANDSHAKE_RESPONSE {
+            return Err(CairnError::Protocol(format!(
+                "expected HANDSHAKE_RESPONSE (0x{:04X}), got 0x{:04X}",
+                message_types::HANDSHAKE_RESPONSE,
+                response_env.msg_type
+            )));
+        }
+
+        // Extract responder's DH public key from the auth_tag field.
+        let dh_public_bytes = response_env.auth_tag.ok_or_else(|| {
+            CairnError::Protocol("HANDSHAKE_RESPONSE missing DH public key".into())
+        })?;
+        let dh_public: [u8; 32] = dh_public_bytes
+            .try_into()
+            .map_err(|_| CairnError::Protocol("DH public key must be 32 bytes".into()))?;
+
+        // Process Noise msg2, produce msg3.
+        let msg3 = match initiator.step(Some(&response_env.payload))? {
+            StepOutput::SendMessage(m) => m,
+            _ => {
+                return Err(CairnError::Crypto(
+                    "unexpected handshake state at msg3".into(),
+                ))
+            }
+        };
+
+        // --- Handshake round 2: FINISH → ACK ---
+        let finish_envelope = MessageEnvelope {
+            version: 1,
+            msg_type: message_types::HANDSHAKE_FINISH,
+            msg_id: new_msg_id(),
+            session_id: None,
+            payload: msg3,
+            auth_tag: None,
+        };
+
+        let (tx, rx) = oneshot::channel();
+        self.response_waiters
+            .write()
+            .await
+            .insert(remote_str.clone(), tx);
+        sender
+            .send_request(remote_pid, finish_envelope.encode()?)
+            .await?;
+
+        let ack_bytes = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            rx,
+        )
+        .await
+        .map_err(|_| CairnError::Transport("handshake timed out waiting for ACK".into()))?
+        .map_err(|_| CairnError::Transport("handshake ACK waiter dropped".into()))?;
+
+        let ack_env = MessageEnvelope::decode(&ack_bytes)?;
+        if ack_env.msg_type != message_types::HANDSHAKE_ACK {
+            return Err(CairnError::Protocol(format!(
+                "expected HANDSHAKE_ACK (0x{:04X}), got 0x{:04X}",
+                message_types::HANDSHAKE_ACK,
+                ack_env.msg_type
+            )));
+        }
+
+        // Handshake complete — derive session key and create ratchet.
+        let hs_result = initiator.result()?;
+        let ratchet = DoubleRatchet::init_initiator(
+            hs_result.session_key,
+            dh_public,
+            RatchetConfig::default(),
+        )?;
+
+        let session_id = SessionId::new();
+        let (state_machine, _) =
+            SessionStateMachine::new(session_id, SessionState::Connected);
+        let session = ApiSession::with_crypto(
+            remote_str.clone(),
+            self.event_tx.clone(),
+            Some(Arc::new(RwLock::new(ratchet))),
+            Some(Arc::new(RwLock::new(state_machine))),
+        )
+        .with_session_id(session_id)
+        .with_swarm(sender.clone(), remote_pid);
+
+        self.sessions
+            .write()
+            .await
+            .insert(remote_str.clone(), session.clone());
+        let _ = self
+            .event_tx
+            .send(Event::StateChanged {
+                peer_id: remote_str,
+                state: ConnectionState::Connected,
+            })
+            .await;
+
+        Ok(session)
+    }
+
     async fn default_connect(&self, _peer_id: &str) -> Result<ConnectResult> {
         let handshake_result = self
             .perform_noise_handshake()
@@ -661,6 +1031,11 @@ pub struct ApiSession {
     sequence_counter: Arc<AtomicU64>,
     session_id: Option<SessionId>,
     outbox: Arc<RwLock<Vec<Vec<u8>>>>,
+    /// Swarm command sender for transmitting messages over the network.
+    /// None when running in-memory (unit tests).
+    swarm_sender: Option<SwarmCommandSender>,
+    /// The remote peer's libp2p PeerId, used to address send_request() calls.
+    remote_libp2p_peer_id: Option<libp2p::PeerId>,
 }
 
 impl std::fmt::Debug for ApiSession {
@@ -692,6 +1067,8 @@ impl ApiSession {
             sequence_counter: Arc::new(AtomicU64::new(0)),
             session_id: None,
             outbox: Arc::new(RwLock::new(Vec::new())),
+            swarm_sender: None,
+            remote_libp2p_peer_id: None,
         }
     }
 
@@ -719,11 +1096,19 @@ impl ApiSession {
             sequence_counter: Arc::new(AtomicU64::new(0)),
             session_id: None,
             outbox: Arc::new(RwLock::new(Vec::new())),
+            swarm_sender: None,
+            remote_libp2p_peer_id: None,
         }
     }
 
     fn with_session_id(mut self, session_id: SessionId) -> Self {
         self.session_id = Some(session_id);
+        self
+    }
+
+    fn with_swarm(mut self, sender: SwarmCommandSender, remote_peer_id: libp2p::PeerId) -> Self {
+        self.swarm_sender = Some(sender);
+        self.remote_libp2p_peer_id = Some(remote_peer_id);
         self
     }
 
@@ -829,16 +1214,17 @@ impl ApiSession {
         };
 
         let envelope_bytes = envelope.encode()?;
-        self.outbox.write().await.push(envelope_bytes);
 
-        let _ = self
-            .event_tx
-            .send(Event::MessageReceived {
-                peer_id: self.peer_id.clone(),
-                channel: channel.name().to_string(),
-                data: data.to_vec(),
-            })
-            .await;
+        // If we have a swarm sender, transmit over the network.
+        // Otherwise, push to the local outbox (in-memory mode / tests).
+        if let (Some(ref sender), Some(ref remote_pid)) =
+            (&self.swarm_sender, &self.remote_libp2p_peer_id)
+        {
+            sender.send_request(*remote_pid, envelope_bytes).await?;
+        } else {
+            self.outbox.write().await.push(envelope_bytes);
+        }
+
         Ok(())
     }
 
@@ -870,7 +1256,14 @@ impl ApiSession {
             auth_tag: None,
         };
         let envelope_bytes = envelope.encode()?;
-        self.outbox.write().await.push(envelope_bytes);
+
+        if let (Some(ref sender), Some(ref remote_pid)) =
+            (&self.swarm_sender, &self.remote_libp2p_peer_id)
+        {
+            sender.send_request(*remote_pid, envelope_bytes).await?;
+        } else {
+            self.outbox.write().await.push(envelope_bytes);
+        }
 
         let channel = ApiChannel::new(name.to_string());
         self.channels

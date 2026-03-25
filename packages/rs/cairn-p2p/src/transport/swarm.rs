@@ -222,6 +222,41 @@ impl SwarmController {
 }
 
 impl SwarmCommandSender {
+    /// Dial the given multiaddr.
+    pub async fn dial(&self, addr: Multiaddr) -> Result<()> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.command_tx
+            .send(SwarmCommand::Dial {
+                addr,
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop shut down".into()))?;
+        reply_rx
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop dropped reply".into()))?
+    }
+
+    /// Send a response to an inbound request.
+    pub async fn send_response(
+        &self,
+        request_id: libp2p::request_response::InboundRequestId,
+        data: Vec<u8>,
+    ) -> Result<()> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.command_tx
+            .send(SwarmCommand::SendResponse {
+                request_id,
+                data,
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop shut down".into()))?;
+        reply_rx
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop dropped reply".into()))?
+    }
+
     /// Send a request to a connected peer via the request-response protocol.
     pub async fn send_request(
         &self,
@@ -484,9 +519,17 @@ async fn build_swarm_inner(
             let peer_id = key.public().to_peer_id();
 
             // mDNS for LAN discovery.
-            let mdns =
-                libp2p::mdns::tokio::Behaviour::new(libp2p::mdns::Config::default(), peer_id)
-                    .map_err(|e| format!("mDNS init failed: {e}"))?;
+            // When disabled, use a very long query interval to suppress traffic.
+            let mdns_config = if config.mdns_enabled {
+                libp2p::mdns::Config::default()
+            } else {
+                let mut c = libp2p::mdns::Config::default();
+                c.query_interval = std::time::Duration::from_secs(86400 * 365);
+                c.ttl = std::time::Duration::from_secs(1);
+                c
+            };
+            let mdns = libp2p::mdns::tokio::Behaviour::new(mdns_config, peer_id)
+                .map_err(|e| format!("mDNS init failed: {e}"))?;
 
             // Kademlia DHT.
             let store = libp2p::kad::store::MemoryStore::new(peer_id);
@@ -498,7 +541,8 @@ async fn build_swarm_inner(
                     StreamProtocol::new(CAIRN_PROTOCOL),
                     libp2p::request_response::ProtocolSupport::Full,
                 )],
-                libp2p::request_response::Config::default(),
+                libp2p::request_response::Config::default()
+                    .with_request_timeout(std::time::Duration::from_secs(30)),
             );
 
             Ok(CairnBehaviour {

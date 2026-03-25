@@ -22,6 +22,9 @@ pub struct TransportConfig {
     pub webtransport_enabled: bool,
     /// Per-transport connection timeout.
     pub per_transport_timeout: Duration,
+    /// Enable mDNS for LAN peer discovery.
+    /// Disable in tests to avoid cross-test interference.
+    pub mdns_enabled: bool,
 }
 
 impl Default for TransportConfig {
@@ -32,6 +35,7 @@ impl Default for TransportConfig {
             websocket_enabled: true,
             webtransport_enabled: true,
             per_transport_timeout: Duration::from_secs(10),
+            mdns_enabled: true,
         }
     }
 }

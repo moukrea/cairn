@@ -26,7 +26,7 @@ pub use api::{
     ApiChannel, ApiNode, ApiSession, ConnectionState, Event, LinkPairingData, NetworkInfo,
     PinPairingData, QrPairingData,
 };
-pub use transport::NatType;
+pub use transport::{NatType, TransportConfig};
 
 /// Convenience type alias: `Node` is the public-facing name for [`ApiNode`].
 pub type Node = ApiNode;
