@@ -82,9 +82,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - run: npm run build
-      - run: npm publish --provenance --access public
+      - name: Publish to npm (OIDC trusted publisher)
+        run: |
+          echo "//registry.npmjs.org/:_authToken=" > ~/.npmrc
+          npm publish --provenance --access public
 
   publish-go:
     needs: detect
