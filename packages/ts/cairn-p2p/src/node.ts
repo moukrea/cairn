@@ -34,8 +34,9 @@ import { DATA_MESSAGE } from './protocol/message-types.js';
 import { MessageQueue } from './session/message-queue.js';
 import type { EnqueueResult } from './session/message-queue.js';
 import type { ConnectionHint } from './pairing/payload.js';
-import type { Libp2p } from 'libp2p';
-import { createCairnNode } from './transport/libp2p-node.js';
+// Libp2p type used for _libp2pNode field — use 'any' to avoid static import
+// createCairnNode is dynamically imported in startTransport() to avoid
+// pulling Node.js-only libp2p deps into browser bundles.
 
 /** Fully resolved configuration with no optional fields. */
 export interface ResolvedConfig {
@@ -337,7 +338,7 @@ export class Node {
   private _identity: IdentityKeypair | null = null;
   private readonly _pairedPeers = new Set<string>();
   /** The libp2p node instance (null until startTransport is called). */
-  private _libp2pNode: Libp2p | null = null;
+  private _libp2pNode: any = null;
   /** Listen addresses reported by the libp2p node. */
   private _listenAddresses: string[] = [];
 
@@ -405,6 +406,7 @@ export class Node {
    * Safe to skip in unit tests — the node works without transport.
    */
   async startTransport(): Promise<void> {
+    const { createCairnNode } = await import("./transport/libp2p-node.js");
     const libp2pNode = await createCairnNode();
     await libp2pNode.start();
     this._libp2pNode = libp2pNode;
@@ -415,7 +417,7 @@ export class Node {
   }
 
   /** Get the libp2p node (null if transport not started). */
-  get libp2pNode(): Libp2p | null {
+  get libp2pNode(): unknown {
     return this._libp2pNode;
   }
 

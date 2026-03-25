@@ -1,61 +1,41 @@
 // Browser-safe entry point for cairn-p2p.
 //
-// Re-exports everything from the main index EXCEPT the transport/libp2p-node
-// module which pulls in Node.js-only dependencies (@libp2p/tcp, @libp2p/yamux
-// native builds, etc.) that fail to bundle with Vite/Rollup for browsers.
+// Exports the Node class but WITHOUT startTransport/createAndStart which
+// pull in @libp2p/* Node.js dependencies that don't bundle for browsers.
 //
-// Browser applications should import from 'cairn-p2p/browser' or use the
-// package.json "browser" export condition (automatic in Vite/webpack).
+// Bundlers (Vite, webpack, etc.) auto-resolve this via the "browser"
+// condition in package.json exports. Can also be imported explicitly
+// as 'cairn-p2p/browser'.
 
-// Re-export everything from the main module
-export {
-  Node,
-  NodeSession,
-  NodeChannel,
+// Re-export the core Node class. The startTransport() method exists on
+// the class but will fail at runtime in browsers (dynamic imports to
+// @libp2p/* won't resolve). This is expected — browser transport requires
+// a different approach (e.g., WebSocket to a signaling server).
+//
+// IMPORTANT: This file must NOT statically import anything from
+// transport/libp2p-node.ts to avoid bundler errors.
+
+export { Node, NodeSession, NodeChannel } from './node.js';
+export type {
+  NodeEvents, SessionEvents, QrPairingData, PinPairingData,
+  LinkPairingData, ResolvedConfig,
 } from './node.js';
 
 export type {
-  NodeEvents,
-  SessionEvents,
-  QrPairingData,
-  PinPairingData,
-  LinkPairingData,
-  ResolvedConfig,
-} from './node.js';
-
-export type {
-  CairnConfig,
-  TurnServerConfig,
-  BackoffConfig,
-  ReconnectionPolicy,
-  MeshSettings,
-  StorageAdapter,
-  StorageBackend,
-  TransportType,
-  NatType,
-  ConnectionState,
-  CipherSuite,
-  PeerId,
+  CairnConfig, TurnServerConfig, BackoffConfig, ReconnectionPolicy,
+  MeshSettings, StorageAdapter, StorageBackend, TransportType,
+  NatType, ConnectionState, CipherSuite, PeerId,
 } from './config.js';
 
 export {
-  DEFAULT_STUN_SERVERS,
-  DEFAULT_TRANSPORT_PREFERENCES,
-  DEFAULT_RECONNECTION_POLICY,
-  DEFAULT_MESH_SETTINGS,
+  DEFAULT_STUN_SERVERS, DEFAULT_TRANSPORT_PREFERENCES,
+  DEFAULT_RECONNECTION_POLICY, DEFAULT_MESH_SETTINGS,
 } from './config.js';
 
 export {
-  ErrorBehavior,
-  CairnError,
-  TransportExhaustedError,
-  SessionExpiredError,
-  PeerUnreachableError,
-  AuthenticationFailedError,
-  PairingRejectedError,
-  PairingExpiredError,
-  MeshRouteNotFoundError,
-  VersionMismatchError,
+  ErrorBehavior, CairnError, TransportExhaustedError, SessionExpiredError,
+  PeerUnreachableError, AuthenticationFailedError, PairingRejectedError,
+  PairingExpiredError, MeshRouteNotFoundError, VersionMismatchError,
 } from './errors.js';
 
 export { SessionStateMachine, isValidTransition } from './session/index.js';
