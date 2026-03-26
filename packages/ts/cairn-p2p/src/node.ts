@@ -237,8 +237,8 @@ export class NodeSession {
 
     // If transport is wired, drain the outbox via libp2p
     if (this._libp2pNode && this._remotePeerId) {
-      this._drainOutbox().catch(() => {
-        // Silently drop transport errors — messages remain in outbox for retry
+      this._drainOutbox().catch((e) => {
+        console.error('[cairn] _drainOutbox error:', e);
       });
     }
   }
@@ -269,8 +269,8 @@ export class NodeSession {
           } catch {
             // Response may be empty for data messages
           }
-        } catch {
-          // Put envelope back at front if send fails
+        } catch (e) {
+          console.error('[cairn] drain send failed:', e);
           this.outbox.unshift(envelopeBytes);
           break;
         }
@@ -792,12 +792,15 @@ export class Node {
 
     const remotePid = peerIdFromString(remotePeerId);
 
-    // Dial the remote peer — append /p2p/<peerId> so libp2p associates
-    // the address with the peer. Stop after first successful address.
+    // Dial the remote peer. Append /p2p/<peerId> if not already present
+    // so libp2p associates the address with the peer.
     let connected = false;
     for (const addrStr of addrs) {
       try {
-        const ma = multiaddr(`${addrStr}/p2p/${remotePeerId}`);
+        const withPeerId = addrStr.includes('/p2p/')
+          ? addrStr
+          : `${addrStr}/p2p/${remotePeerId}`;
+        const ma = multiaddr(withPeerId);
         await this._libp2pNode.dial(ma);
         connected = true;
         break;

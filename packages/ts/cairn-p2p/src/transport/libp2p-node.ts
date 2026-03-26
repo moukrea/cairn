@@ -112,15 +112,23 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
     }
   }
 
+  // In Node.js, listen on TCP + WS ephemeral ports (matching the Rust host).
+  // In browsers, don't listen — browsers only dial out.
+  const listenAddrs: string[] = [];
+  if (isNodeEnvironment()) {
+    listenAddrs.push('/ip4/0.0.0.0/tcp/0');
+    listenAddrs.push('/ip4/0.0.0.0/tcp/0/ws');
+  }
+
   const node = await createLibp2p({
+    addresses: { listen: listenAddrs },
     transports: transports as any[],
     streamMuxers: [yamux()],
     connectionEncrypters: [noise()],
     connectionManager: {
-      // Keep connections alive — cairn sessions are long-lived
       minConnections: 0,
       maxConnections: 50,
-      inactivityTimeout: 300_000, // 5 minutes
+      inactivityTimeout: 300_000,
     },
   });
 
