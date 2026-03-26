@@ -792,16 +792,17 @@ export class Node {
 
     const remotePid = peerIdFromString(remotePeerId);
 
-    // Dial the remote peer — stop after first successful address.
+    // Dial the remote peer — append /p2p/<peerId> so libp2p associates
+    // the address with the peer. Stop after first successful address.
     let connected = false;
     for (const addrStr of addrs) {
       try {
-        const ma = multiaddr(addrStr);
+        const ma = multiaddr(`${addrStr}/p2p/${remotePeerId}`);
         await this._libp2pNode.dial(ma);
         connected = true;
         break;
-      } catch {
-        // Try next address
+      } catch (e) {
+        console.warn(`[cairn] dial ${addrStr} failed:`, e);
       }
     }
     if (!connected) {
