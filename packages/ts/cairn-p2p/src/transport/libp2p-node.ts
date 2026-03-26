@@ -84,7 +84,7 @@ export interface CreateNodeOptions {
 export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp2p> {
   const config = { ...defaultTransportConfig(), ...options?.config };
   const { createLibp2p } = await import('libp2p');
-  const { yamux } = await import('@libp2p/yamux');
+  const { yamux } = await import('@chainsafe/libp2p-yamux');
   const { noise } = await import('@chainsafe/libp2p-noise');
 
   const transports: unknown[] = [];

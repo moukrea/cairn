@@ -20,13 +20,14 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts && tsup src/browser.ts --format esm,cjs --dts --no-splitting --external @libp2p/tcp --external @libp2p/webrtc --external @libp2p/websockets --external @libp2p/webtransport --external @libp2p/yamux --external @libp2p/circuit-relay-v2 --external @chainsafe/libp2p-noise --external libp2p --external @multiformats/multiaddr --external @libp2p/peer-id",
+    "build": "tsup src/index.ts --format esm,cjs --dts && tsup src/browser.ts --format esm,cjs --dts --no-splitting --external @libp2p/tcp --external @libp2p/webrtc --external @libp2p/websockets --external @libp2p/webtransport --external @libp2p/circuit-relay-v2 --external @chainsafe/libp2p-noise --external libp2p --external @multiformats/multiaddr --external @libp2p/peer-id",
     "test": "vitest run",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@chainsafe/libp2p-noise": "^16.0.0",
+    "@chainsafe/libp2p-yamux": "^7.0.4",
     "@libp2p/circuit-relay-v2": "^2.0.0",
     "@libp2p/interface": "^2.0.0",
     "@libp2p/kad-dht": "^13.0.0",
