@@ -100,24 +100,16 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
       transports.push(webSockets());
     }
   } else {
-    // Browser transports
-    if (config.webrtcEnabled) {
-      const { webRTC } = await import('@libp2p/webrtc');
-      transports.push(webRTC());
-    }
+    // Browser transports — WebSocket is the primary transport for
+    // connecting to Rust/Node.js hosts that listen on /ws multiaddrs.
+    // WebRTC and WebTransport are omitted: WebRTC requires the identify
+    // service and additional config; WebTransport requires HTTP/3 support.
+    // These can be added later for browser-to-browser use cases.
     if (config.websocketEnabled) {
       const { webSockets } = await import('@libp2p/websockets');
-      transports.push(webSockets());
+      const { all } = await import('@libp2p/websockets/filters');
+      transports.push(webSockets({ filter: all }));
     }
-    if (config.webtransportEnabled) {
-      const { webTransport } = await import('@libp2p/webtransport');
-      transports.push(webTransport());
-    }
-  }
-
-  if (config.circuitRelayEnabled) {
-    const { circuitRelayTransport } = await import('@libp2p/circuit-relay-v2');
-    transports.push(circuitRelayTransport());
   }
 
   const node = await createLibp2p({
