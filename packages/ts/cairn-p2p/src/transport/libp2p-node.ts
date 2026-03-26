@@ -116,6 +116,12 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
     transports: transports as any[],
     streamMuxers: [yamux()],
     connectionEncrypters: [noise()],
+    connectionManager: {
+      // Keep connections alive — cairn sessions are long-lived
+      minConnections: 0,
+      maxConnections: 50,
+      inactivityTimeout: 300_000, // 5 minutes
+    },
   });
 
   return node;
