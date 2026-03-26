@@ -40,5 +40,6 @@ export {
 export { SessionStateMachine, isValidTransition } from './session/index.js';
 export type { StateChangedEvent, StateChangedListener } from './session/index.js';
 
-export type { ServerConfig } from './server/index.js';
-export { defaultServerConfig } from './server/index.js';
+// Server exports omitted from browser build — they require Node.js
+// builtins (http.createServer, crypto.timingSafeEqual) that aren't
+// available in browsers. Use the main entry point for server mode.
