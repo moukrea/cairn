@@ -1,19 +1,18 @@
-// Browser-safe entry point for cairn-p2p.
+// Browser entry point for cairn-p2p.
 //
-// Exports the Node class but WITHOUT startTransport/createAndStart which
-// pull in @libp2p/* Node.js dependencies that don't bundle for browsers.
+// Exports the Node class with full transport support for browsers.
+// The browser build bundles libp2p core, WebSocket transport, yamux muxer,
+// and noise encryption so that Node.startTransport() works in browsers.
+// Node.js-only transports (TCP) and optional transports (WebRTC,
+// WebTransport, Circuit Relay) are externalized and loaded on demand.
 //
 // Bundlers (Vite, webpack, etc.) auto-resolve this via the "browser"
 // condition in package.json exports. Can also be imported explicitly
 // as 'cairn-p2p/browser'.
-
-// Re-export the core Node class. The startTransport() method exists on
-// the class but will fail at runtime in browsers (dynamic imports to
-// @libp2p/* won't resolve). This is expected — browser transport requires
-// a different approach (e.g., WebSocket to a signaling server).
 //
 // IMPORTANT: This file must NOT statically import anything from
-// transport/libp2p-node.ts to avoid bundler errors.
+// transport/libp2p-node.ts — the dynamic imports in Node.startTransport()
+// will resolve at runtime from the bundled dependencies.
 
 export { Node, NodeSession, NodeChannel } from './node.js';
 export type {
