@@ -17,7 +17,7 @@
 export { Node, NodeSession, NodeChannel } from './node.js';
 export type {
   NodeEvents, SessionEvents, QrPairingData, PinPairingData,
-  LinkPairingData, ResolvedConfig,
+  LinkPairingData, ResolvedConfig, SavedSessionState,
 } from './node.js';
 
 export type {

@@ -5,9 +5,10 @@ use std::time::SystemTime;
 
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 
-use crate::config::CairnConfig;
+use crate::config::{CairnConfig, StorageBackend};
 use crate::crypto::exchange::X25519Keypair;
 use crate::crypto::identity::IdentityKeypair;
+use crate::crypto::keystore::InMemoryKeyStore;
 use crate::crypto::noise::{NoiseXXHandshake, Role, StepOutput};
 use crate::crypto::ratchet::{DoubleRatchet, RatchetConfig};
 use crate::error::{CairnError, Result};
@@ -20,8 +21,11 @@ use crate::protocol::envelope::{new_msg_id, MessageEnvelope};
 use crate::protocol::message_types;
 use crate::session::channel::ChannelInit;
 use crate::session::heartbeat::{HeartbeatConfig, HeartbeatMonitor};
+use crate::session::persistence::{self, SavedSession};
 use crate::session::queue::{MessageQueue, QueueConfig};
+use crate::session::reconnection::{self, NonceCache};
 use crate::session::{SessionId, SessionState, SessionStateMachine};
+use crate::traits::KeyStore;
 use crate::transport::fallback::FallbackTransportType;
 use crate::transport::nat::NatType;
 use crate::transport::swarm::{build_swarm, SwarmCommandSender, SwarmEvent as CairnSwarmEvent};
@@ -32,6 +36,17 @@ use super::events::{ConnectionState, Event, NetworkInfo};
 const EVENT_CHANNEL_CAPACITY: usize = 256;
 const APP_MSG_TYPE_MIN: u16 = 0xF000;
 const APP_MSG_TYPE_MAX: u16 = 0xFFFF;
+
+/// Maximum number of auto-reconnect retries before giving up.
+const MAX_RECONNECT_RETRIES: u32 = 10;
+
+/// Get current Unix timestamp in seconds.
+fn unix_timestamp_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
 
 pub struct ApiNode {
     config: CairnConfig,
@@ -64,6 +79,10 @@ pub struct ApiNode {
     /// Pending handshake response waiters, keyed by remote libp2p PeerId string.
     /// connect_transport() registers here; the event loop forwards ResponseReceived to it.
     response_waiters: Arc<RwLock<HashMap<String, oneshot::Sender<Vec<u8>>>>>,
+    /// Saved sessions for resumption, keyed by remote libp2p PeerId string.
+    saved_sessions: Arc<RwLock<HashMap<String, SavedSession>>>,
+    /// Keystore for persisting session state.
+    keystore: Arc<dyn KeyStore>,
 }
 
 pub struct ConnectResult {
@@ -86,6 +105,17 @@ impl ApiNode {
         let (tx, rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
         let identity = IdentityKeypair::generate();
         let local_identity = LocalIdentity::generate();
+
+        // Create keystore based on storage backend config.
+        // For now, always use InMemoryKeyStore since FilesystemKeyStore
+        // requires a passphrase. Session persistence uses this for save/load.
+        let keystore: Arc<dyn KeyStore> = match &config.storage_backend {
+            StorageBackend::InMemory => Arc::new(InMemoryKeyStore::new()),
+            // Filesystem and Custom both fall back to in-memory for now
+            // (FilesystemKeyStore requires passphrase, handled at a higher level)
+            _ => Arc::new(InMemoryKeyStore::new()),
+        };
+
         Ok(Self {
             config,
             identity,
@@ -100,6 +130,8 @@ impl ApiNode {
             swarm_sender: None,
             listen_addresses: RwLock::new(Vec::new()),
             response_waiters: Arc::new(RwLock::new(HashMap::new())),
+            saved_sessions: Arc::new(RwLock::new(HashMap::new())),
+            keystore,
         })
     }
 
@@ -216,18 +248,35 @@ impl ApiNode {
         let sender_for_loop = sender.clone();
         self.swarm_sender = Some(sender);
 
+        // Load saved sessions from keystore for resume validation.
+        {
+            let loaded = persistence::load_all_sessions(self.keystore.as_ref())
+                .await
+                .unwrap_or_default();
+            let mut ss = self.saved_sessions.write().await;
+            for s in loaded {
+                ss.insert(s.remote_libp2p_peer_id.clone(), s);
+            }
+        }
+
         // Spawn background task to bridge swarm events → node events.
         // Also handles inbound handshake requests from remote peers.
         let event_tx = self.event_tx.clone();
         let sessions = self.sessions.clone();
         let response_waiters = self.response_waiters.clone();
         let identity_secret = self.identity.secret_bytes();
+        let saved_sessions = self.saved_sessions.clone();
+        let keystore = self.keystore.clone();
 
         // In-progress inbound handshakes, keyed by remote libp2p PeerId string.
         // Stores the Noise responder state and the DH keypair between rounds.
         let inbound_handshakes: Arc<
             RwLock<HashMap<String, (NoiseXXHandshake, X25519Keypair)>>,
         > = Arc::new(RwLock::new(HashMap::new()));
+
+        // Nonce cache for SESSION_RESUME replay protection.
+        let nonce_cache: Arc<tokio::sync::Mutex<NonceCache>> =
+            Arc::new(tokio::sync::Mutex::new(NonceCache::new()));
 
         tokio::spawn(async move {
             while let Some(event) = controller.next_event().await {
@@ -249,12 +298,128 @@ impl ApiNode {
                             .await;
                     }
                     CairnSwarmEvent::ConnectionClosed { peer_id } => {
+                        let peer_str = peer_id.to_string();
                         let _ = event_tx
                             .send(Event::StateChanged {
-                                peer_id: peer_id.to_string(),
+                                peer_id: peer_str.clone(),
                                 state: ConnectionState::Disconnected,
                             })
                             .await;
+
+                        // Check if we have a saved session for auto-reconnect.
+                        let saved_opt = saved_sessions.read().await.get(&peer_str).cloned();
+                        if let Some(saved) = saved_opt {
+                            // Spawn background auto-reconnect task.
+                            let sender_clone = sender_for_loop.clone();
+                            let sessions_clone = sessions.clone();
+                            let event_tx_clone = event_tx.clone();
+                            tokio::spawn(async move {
+                                let mut backoff = reconnection::BackoffState::new(
+                                    reconnection::BackoffConfig {
+                                        initial_delay: std::time::Duration::from_secs(1),
+                                        max_delay: std::time::Duration::from_secs(30),
+                                        factor: 2.0,
+                                    },
+                                );
+
+                                for _ in 0..MAX_RECONNECT_RETRIES {
+                                    let delay = backoff.next_delay();
+                                    tokio::time::sleep(delay).await;
+
+                                    // Check if the session was already re-established
+                                    // (e.g., by the remote peer connecting to us).
+                                    {
+                                        let sessions_guard = sessions_clone.read().await;
+                                        if let Some(session) = sessions_guard.get(&peer_str) {
+                                            if matches!(
+                                                session.state().await,
+                                                ConnectionState::Connected
+                                            ) {
+                                                // Already reconnected, nothing to do.
+                                                return;
+                                            }
+                                        }
+                                    }
+
+                                    // Try resume first.
+                                    if !saved.is_expired() {
+                                        if let Ok(ratchet) = DoubleRatchet::import_state(
+                                            &saved.ratchet_state,
+                                            RatchetConfig::default(),
+                                        ) {
+                                            if let Ok(resumption_key) = ratchet.derive_resumption_key() {
+                                                let mut nonce = [0u8; 32];
+                                                rand::RngCore::fill_bytes(
+                                                    &mut rand::thread_rng(),
+                                                    &mut nonce,
+                                                );
+                                                let timestamp = unix_timestamp_secs();
+                                                let proof = reconnection::generate_resume_proof(
+                                                    &resumption_key,
+                                                    &saved.session_id,
+                                                    &nonce,
+                                                    timestamp,
+                                                );
+
+                                                if let Ok(resume_payload) =
+                                                    reconnection::encode_session_resume(
+                                                        &saved.session_id,
+                                                        &proof,
+                                                        saved.sequence_rx,
+                                                    )
+                                                {
+                                                    // Dial saved addresses
+                                                    for addr_str in &saved.remote_addrs {
+                                                        if let Ok(addr) =
+                                                            addr_str.parse::<libp2p::Multiaddr>()
+                                                        {
+                                                            let _ = sender_clone.dial(addr).await;
+                                                        }
+                                                    }
+
+                                                    let resume_env = MessageEnvelope {
+                                                        version: 1,
+                                                        msg_type: message_types::SESSION_RESUME,
+                                                        msg_id: new_msg_id(),
+                                                        session_id: Some({
+                                                            let mut arr = [0u8; 32];
+                                                            arr[..16].copy_from_slice(
+                                                                &saved.session_id,
+                                                            );
+                                                            arr
+                                                        }),
+                                                        payload: resume_payload,
+                                                        auth_tag: None,
+                                                    };
+
+                                                    if let Ok(bytes) = resume_env.encode() {
+                                                        // Best-effort send; if it fails, we'll
+                                                        // retry on next loop iteration.
+                                                        let _ = sender_clone
+                                                            .send_request(peer_id, bytes)
+                                                            .await;
+                                                        // Note: We can't easily wait for the
+                                                        // response here since response_waiters
+                                                        // are handled in the main event loop.
+                                                        // The session will be created by the
+                                                        // response handler if it succeeds.
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // All retries exhausted — emit error event.
+                                let _ = event_tx_clone
+                                    .send(Event::Error {
+                                        error: format!(
+                                            "auto-reconnect failed for {peer_str} after {MAX_RECONNECT_RETRIES} attempts"
+                                        ),
+                                    })
+                                    .await;
+                            });
+                        }
                     }
                     CairnSwarmEvent::RequestReceived {
                         peer_id,
@@ -336,6 +501,29 @@ impl ApiNode {
                                                     );
                                                 if let Ok(ratchet) = ratchet_result {
                                                     let session_id = SessionId::new();
+
+                                                    // Save session for future resumption.
+                                                    let saved = SavedSession {
+                                                        session_id: *session_id.as_bytes(),
+                                                        remote_libp2p_peer_id: peer_str.clone(),
+                                                        ratchet_state: ratchet.export_state(),
+                                                        sequence_tx: 0,
+                                                        sequence_rx: 0,
+                                                        ratchet_epoch: 0,
+                                                        created_at: unix_timestamp_secs(),
+                                                        last_activity: unix_timestamp_secs(),
+                                                        remote_addrs: vec![],
+                                                        expiry_secs: persistence::DEFAULT_EXPIRY_SECS,
+                                                    };
+                                                    saved_sessions.write().await.insert(
+                                                        peer_str.clone(),
+                                                        saved.clone(),
+                                                    );
+                                                    let _ = persistence::save_session(
+                                                        keystore.as_ref(),
+                                                        &saved,
+                                                    ).await;
+
                                                     let (sm, _) =
                                                         SessionStateMachine::new(
                                                             session_id,
@@ -403,6 +591,187 @@ impl ApiNode {
                                         .send_response(request_id, vec![])
                                         .await;
                                 }
+                            }
+                            Ok(env)
+                                if env.msg_type == message_types::SESSION_RESUME =>
+                            {
+                                // --- Inbound SESSION_RESUME ---
+                                // Decode the resume payload.
+                                let decoded = reconnection::decode_session_resume(&env.payload);
+                                let (session_id_bytes, proof, _last_rx_seq) = match decoded {
+                                    Ok(v) => v,
+                                    Err(_) => {
+                                        // Malformed payload — send SESSION_EXPIRED with InvalidProof
+                                        if let Ok(payload) = reconnection::encode_session_expired(
+                                            reconnection::ExpiredReason::InvalidProof,
+                                        ) {
+                                            let resp = MessageEnvelope {
+                                                version: 1,
+                                                msg_type: message_types::SESSION_EXPIRED,
+                                                msg_id: new_msg_id(),
+                                                session_id: None,
+                                                payload,
+                                                auth_tag: None,
+                                            };
+                                            if let Ok(bytes) = resp.encode() {
+                                                let _ = sender_for_loop
+                                                    .send_response(request_id, bytes)
+                                                    .await;
+                                            }
+                                        }
+                                        continue;
+                                    }
+                                };
+
+                                // Look up the saved session by the peer that sent the request.
+                                // The responder stores sessions keyed by the remote peer's libp2p PeerId.
+                                let ss_guard = saved_sessions.read().await;
+                                let saved_opt = ss_guard.get(&peer_str).cloned();
+                                drop(ss_guard);
+
+                                // Helper: send a SESSION_EXPIRED rejection.
+                                macro_rules! send_session_expired {
+                                    ($reason:expr) => {
+                                        if let Ok(payload) = reconnection::encode_session_expired($reason) {
+                                            let resp = MessageEnvelope {
+                                                version: 1,
+                                                msg_type: message_types::SESSION_EXPIRED,
+                                                msg_id: new_msg_id(),
+                                                session_id: None,
+                                                payload,
+                                                auth_tag: None,
+                                            };
+                                            if let Ok(bytes) = resp.encode() {
+                                                let _ = sender_for_loop
+                                                    .send_response(request_id, bytes)
+                                                    .await;
+                                            }
+                                        }
+                                    };
+                                }
+
+                                let saved = match saved_opt {
+                                    Some(s) => s,
+                                    None => {
+                                        send_session_expired!(reconnection::ExpiredReason::NotFound);
+                                        continue;
+                                    }
+                                };
+
+                                // Validate session_id matches
+                                if saved.session_id != session_id_bytes {
+                                    send_session_expired!(reconnection::ExpiredReason::NotFound);
+                                    continue;
+                                }
+
+                                // Check expiry
+                                if saved.is_expired() {
+                                    saved_sessions.write().await.remove(&peer_str);
+                                    let _ = persistence::delete_session(
+                                        keystore.as_ref(), &peer_str,
+                                    ).await;
+                                    send_session_expired!(reconnection::ExpiredReason::Expired);
+                                    continue;
+                                }
+
+                                // Check nonce/timestamp freshness (replay protection)
+                                {
+                                    let mut cache = nonce_cache.lock().await;
+                                    if !cache.check_and_record(&proof.nonce, proof.timestamp) {
+                                        send_session_expired!(reconnection::ExpiredReason::Replay);
+                                        continue;
+                                    }
+                                }
+
+                                // Verify the HMAC proof
+                                let ratchet_result = DoubleRatchet::import_state(
+                                    &saved.ratchet_state,
+                                    RatchetConfig::default(),
+                                );
+                                let ratchet = match ratchet_result {
+                                    Ok(r) => r,
+                                    Err(_) => {
+                                        send_session_expired!(reconnection::ExpiredReason::InvalidProof);
+                                        continue;
+                                    }
+                                };
+                                let resumption_key = match ratchet.derive_resumption_key() {
+                                    Ok(k) => k,
+                                    Err(_) => {
+                                        send_session_expired!(reconnection::ExpiredReason::InvalidProof);
+                                        continue;
+                                    }
+                                };
+
+                                if !reconnection::verify_resume_proof(
+                                    &resumption_key,
+                                    &session_id_bytes,
+                                    &proof,
+                                ) {
+                                    send_session_expired!(reconnection::ExpiredReason::InvalidProof);
+                                    continue;
+                                }
+
+                                // Proof valid — create session with restored ratchet.
+                                let session_id = SessionId::from_uuid(
+                                    uuid::Uuid::from_bytes(session_id_bytes),
+                                );
+                                let (sm, _) = SessionStateMachine::new(
+                                    session_id,
+                                    SessionState::Connected,
+                                );
+                                let session = ApiSession::with_crypto(
+                                    peer_str.clone(),
+                                    event_tx.clone(),
+                                    Some(Arc::new(RwLock::new(ratchet))),
+                                    Some(Arc::new(RwLock::new(sm))),
+                                )
+                                .with_session_id(session_id)
+                                .with_swarm(sender_for_loop.clone(), peer_id);
+
+                                sessions.write().await.insert(
+                                    peer_str.clone(),
+                                    session,
+                                );
+
+                                // Update last_activity on the saved session
+                                {
+                                    let mut updated = saved.clone();
+                                    updated.last_activity = unix_timestamp_secs();
+                                    saved_sessions.write().await.insert(
+                                        peer_str.clone(),
+                                        updated.clone(),
+                                    );
+                                    let _ = persistence::save_session(
+                                        keystore.as_ref(), &updated,
+                                    ).await;
+                                }
+
+                                // Send SESSION_RESUME_ACK
+                                if let Ok(ack_payload) = reconnection::encode_session_resume_ack(
+                                    saved.sequence_rx,
+                                ) {
+                                    let ack = MessageEnvelope {
+                                        version: 1,
+                                        msg_type: message_types::SESSION_RESUME_ACK,
+                                        msg_id: new_msg_id(),
+                                        session_id: None,
+                                        payload: ack_payload,
+                                        auth_tag: None,
+                                    };
+                                    if let Ok(bytes) = ack.encode() {
+                                        let _ = sender_for_loop
+                                            .send_response(request_id, bytes)
+                                            .await;
+                                    }
+                                }
+
+                                let _ = event_tx
+                                    .send(Event::StateChanged {
+                                        peer_id: peer_str,
+                                        state: ConnectionState::Connected,
+                                    })
+                                    .await;
                             }
                             _ => {
                                 // Regular data message — route to session
@@ -894,6 +1263,27 @@ impl ApiNode {
         )?;
 
         let session_id = SessionId::new();
+
+        // Save session state for future resumption.
+        let saved = SavedSession {
+            session_id: *session_id.as_bytes(),
+            remote_libp2p_peer_id: remote_str.clone(),
+            ratchet_state: ratchet.export_state(),
+            sequence_tx: 0,
+            sequence_rx: 0,
+            ratchet_epoch: 0,
+            created_at: unix_timestamp_secs(),
+            last_activity: unix_timestamp_secs(),
+            remote_addrs: addrs.to_vec(),
+            expiry_secs: persistence::DEFAULT_EXPIRY_SECS,
+        };
+        self.saved_sessions
+            .write()
+            .await
+            .insert(remote_str.clone(), saved.clone());
+        // Persist to keystore (best-effort, don't fail the connection)
+        let _ = persistence::save_session(self.keystore.as_ref(), &saved).await;
+
         let (state_machine, _) =
             SessionStateMachine::new(session_id, SessionState::Connected);
         let session = ApiSession::with_crypto(
@@ -918,6 +1308,172 @@ impl ApiNode {
             .await;
 
         Ok(session)
+    }
+
+    /// Resume a previously established session using the SESSION_RESUME protocol.
+    ///
+    /// This is a single round-trip (SESSION_RESUME -> SESSION_RESUME_ACK), much
+    /// faster than a full Noise XX handshake. The saved session must contain valid
+    /// ratchet state and the remote peer must still have the session cached.
+    ///
+    /// Returns `Err` with a descriptive message if the session is expired or
+    /// the remote peer rejects the resume attempt.
+    ///
+    /// Requires `start_transport()` to have been called first.
+    pub async fn try_resume_transport(
+        &self,
+        saved: &SavedSession,
+    ) -> Result<ApiSession> {
+        let sender = self
+            .swarm_sender
+            .as_ref()
+            .ok_or_else(|| CairnError::Transport("transport not started".into()))?;
+
+        // Check if session is expired locally before even trying.
+        if saved.is_expired() {
+            return Err(CairnError::Protocol("saved session has expired".into()));
+        }
+
+        let remote_pid: libp2p::PeerId = saved
+            .remote_libp2p_peer_id
+            .parse()
+            .map_err(|e| CairnError::Protocol(format!("invalid libp2p peer ID: {e}")))?;
+
+        // Dial the remote peer's saved addresses.
+        for addr_str in &saved.remote_addrs {
+            if let Ok(addr) = addr_str.parse::<libp2p::Multiaddr>() {
+                let _ = sender.dial(addr).await;
+            }
+        }
+
+        // Restore the DoubleRatchet from saved state.
+        let ratchet = DoubleRatchet::import_state(
+            &saved.ratchet_state,
+            RatchetConfig::default(),
+        )?;
+
+        // Derive the resumption key and generate the proof.
+        let resumption_key = ratchet.derive_resumption_key()?;
+        let mut nonce = [0u8; 32];
+        rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut nonce);
+        let timestamp = unix_timestamp_secs();
+        let proof = reconnection::generate_resume_proof(
+            &resumption_key,
+            &saved.session_id,
+            &nonce,
+            timestamp,
+        );
+
+        // Build and send the SESSION_RESUME envelope.
+        let resume_payload = reconnection::encode_session_resume(
+            &saved.session_id,
+            &proof,
+            saved.sequence_rx,
+        )?;
+        let resume_envelope = MessageEnvelope {
+            version: 1,
+            msg_type: message_types::SESSION_RESUME,
+            msg_id: new_msg_id(),
+            session_id: Some({
+                let mut arr = [0u8; 32];
+                arr[..16].copy_from_slice(&saved.session_id);
+                arr
+            }),
+            payload: resume_payload,
+            auth_tag: None,
+        };
+
+        let (tx, rx) = oneshot::channel();
+        let remote_str = remote_pid.to_string();
+        self.response_waiters
+            .write()
+            .await
+            .insert(remote_str.clone(), tx);
+        sender
+            .send_request(remote_pid, resume_envelope.encode()?)
+            .await?;
+
+        // Wait for response (SESSION_RESUME_ACK or SESSION_EXPIRED).
+        let response_bytes = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            rx,
+        )
+        .await
+        .map_err(|_| CairnError::Transport("session resume timed out".into()))?
+        .map_err(|_| CairnError::Transport("session resume waiter dropped".into()))?;
+
+        let response_env = MessageEnvelope::decode(&response_bytes)?;
+
+        match response_env.msg_type {
+            message_types::SESSION_RESUME_ACK => {
+                // Resume accepted! Create session with restored ratchet.
+                let session_id = SessionId::from_uuid(uuid::Uuid::from_bytes(saved.session_id));
+                let (state_machine, _) =
+                    SessionStateMachine::new(session_id, SessionState::Connected);
+                let session = ApiSession::with_crypto(
+                    remote_str.clone(),
+                    self.event_tx.clone(),
+                    Some(Arc::new(RwLock::new(ratchet))),
+                    Some(Arc::new(RwLock::new(state_machine))),
+                )
+                .with_session_id(session_id)
+                .with_swarm(sender.clone(), remote_pid);
+
+                self.sessions
+                    .write()
+                    .await
+                    .insert(remote_str.clone(), session.clone());
+
+                // Update the saved session's last_activity timestamp.
+                let mut updated = saved.clone();
+                updated.last_activity = unix_timestamp_secs();
+                self.saved_sessions
+                    .write()
+                    .await
+                    .insert(remote_str.clone(), updated.clone());
+                let _ = persistence::save_session(self.keystore.as_ref(), &updated).await;
+
+                let _ = self
+                    .event_tx
+                    .send(Event::StateChanged {
+                        peer_id: remote_str,
+                        state: ConnectionState::Connected,
+                    })
+                    .await;
+
+                Ok(session)
+            }
+            message_types::SESSION_EXPIRED => {
+                let reason = reconnection::decode_session_expired(&response_env.payload)
+                    .unwrap_or(reconnection::ExpiredReason::Expired);
+                // Remove the stale saved session.
+                self.saved_sessions
+                    .write()
+                    .await
+                    .remove(&remote_str);
+                let _ = persistence::delete_session(
+                    self.keystore.as_ref(),
+                    &remote_str,
+                )
+                .await;
+                Err(CairnError::Protocol(format!(
+                    "session resume rejected: {reason}"
+                )))
+            }
+            other => Err(CairnError::Protocol(format!(
+                "unexpected response to SESSION_RESUME: 0x{other:04X}"
+            ))),
+        }
+    }
+
+    /// Get a reference to the saved sessions map.
+    pub fn saved_sessions(&self) -> &Arc<RwLock<HashMap<String, SavedSession>>> {
+        &self.saved_sessions
+    }
+
+    /// Get a reference to the keystore.
+    pub fn keystore(&self) -> &Arc<dyn KeyStore> {
+        &self.keystore
     }
 
     async fn default_connect(&self, _peer_id: &str) -> Result<ConnectResult> {

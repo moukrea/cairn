@@ -8,6 +8,7 @@ import { aeadEncrypt, aeadDecrypt } from './aead.js';
 const ROOT_KDF_INFO = new TextEncoder().encode('cairn-root-chain-v1');
 const CHAIN_KDF_INFO = new TextEncoder().encode('cairn-chain-advance-v1');
 const MESSAGE_KEY_KDF_INFO = new TextEncoder().encode('cairn-msg-encrypt-v1');
+const RESUMPTION_KEY_INFO = new TextEncoder().encode('cairn-session-resume-v1');
 
 /** Header sent alongside each Double Ratchet encrypted message. */
 export interface RatchetHeader {
@@ -238,6 +239,95 @@ export class DoubleRatchet {
       if (e instanceof CairnError) throw e;
       throw new CairnError('CRYPTO', `ratchet state deserialization: ${e}`);
     }
+  }
+
+  /**
+   * Export the ratchet state as a JSON-serializable object.
+   *
+   * Unlike `exportState()` which returns encoded bytes, this returns
+   * a plain object suitable for storing in IndexedDB or embedding
+   * in other JSON structures (e.g., SavedConnection).
+   */
+  exportStateObject(): object {
+    const skippedEntries: Array<[string, number[]]> = [];
+    for (const [key, value] of this.state.skippedKeys) {
+      skippedEntries.push([key, Array.from(value)]);
+    }
+
+    return {
+      dhSelfSecret: Array.from(this.state.dhSelfSecret),
+      dhSelfPublic: Array.from(this.state.dhSelfPublic),
+      dhRemote: this.state.dhRemote ? Array.from(this.state.dhRemote) : null,
+      rootKey: Array.from(this.state.rootKey),
+      chainKeySend: this.state.chainKeySend ? Array.from(this.state.chainKeySend) : null,
+      chainKeyRecv: this.state.chainKeyRecv ? Array.from(this.state.chainKeyRecv) : null,
+      msgNumSend: this.state.msgNumSend,
+      msgNumRecv: this.state.msgNumRecv,
+      prevChainLen: this.state.prevChainLen,
+      skippedKeys: skippedEntries,
+      cipher: this.config.cipher,
+      maxSkip: this.config.maxSkip,
+    };
+  }
+
+  /**
+   * Restore a DoubleRatchet from an exported state object.
+   *
+   * This is the inverse of `exportStateObject()`. Accepts a plain
+   * object (as returned from IndexedDB or JSON.parse).
+   */
+  static fromExportedState(stateObj: object): DoubleRatchet {
+    const obj = stateObj as any;
+    try {
+      if (!Array.isArray(obj.dhSelfSecret) || !Array.isArray(obj.dhSelfPublic) || !Array.isArray(obj.rootKey)) {
+        throw new Error('missing required array fields');
+      }
+      if (typeof obj.msgNumSend !== 'number' || typeof obj.msgNumRecv !== 'number') {
+        throw new Error('missing required numeric fields');
+      }
+
+      const skippedKeys = new Map<string, Uint8Array>();
+      if (obj.skippedKeys) {
+        for (const [key, value] of obj.skippedKeys) {
+          skippedKeys.set(key, new Uint8Array(value));
+        }
+      }
+
+      const state: RatchetState = {
+        dhSelfSecret: new Uint8Array(obj.dhSelfSecret),
+        dhSelfPublic: new Uint8Array(obj.dhSelfPublic),
+        dhRemote: obj.dhRemote ? new Uint8Array(obj.dhRemote) : null,
+        rootKey: new Uint8Array(obj.rootKey),
+        chainKeySend: obj.chainKeySend ? new Uint8Array(obj.chainKeySend) : null,
+        chainKeyRecv: obj.chainKeyRecv ? new Uint8Array(obj.chainKeyRecv) : null,
+        msgNumSend: obj.msgNumSend,
+        msgNumRecv: obj.msgNumRecv,
+        prevChainLen: obj.prevChainLen,
+        skippedKeys,
+      };
+
+      const config: RatchetConfig = {
+        cipher: obj.cipher ?? 'aes-256-gcm',
+        maxSkip: obj.maxSkip ?? 100,
+      };
+
+      return new DoubleRatchet(state, config);
+    } catch (e) {
+      if (e instanceof CairnError) throw e;
+      throw new CairnError('CRYPTO', `ratchet state object deserialization: ${e}`);
+    }
+  }
+
+  /**
+   * Derive a 32-byte resumption key from the current root key.
+   *
+   * Used by the SESSION_RESUME protocol to prove that both sides
+   * share the same session state without revealing the root key.
+   *
+   * HKDF-SHA256(root_key, info="cairn-session-resume-v1") -> 32 bytes
+   */
+  deriveResumptionKey(): Uint8Array {
+    return hkdfSha256(this.state.rootKey, undefined, RESUMPTION_KEY_INFO, 32);
   }
 
   /** Skip message keys up to (but not including) the given message number. */

@@ -36,10 +36,14 @@ import {
   HANDSHAKE_RESPONSE,
   HANDSHAKE_FINISH,
   HANDSHAKE_ACK,
+  SESSION_RESUME,
+  SESSION_RESUME_ACK,
+  SESSION_EXPIRED,
   isHandshakeType,
 } from './protocol/message-types.js';
 import { MessageQueue } from './session/message-queue.js';
 import type { EnqueueResult } from './session/message-queue.js';
+import { generateResumeProof, verifyResumeProof } from './session/reconnection.js';
 import type { ConnectionHint } from './pairing/payload.js';
 // Libp2p type used for _libp2pNode field — use 'any' to avoid static import
 // createCairnNode is dynamically imported in startTransport() to avoid
@@ -91,6 +95,28 @@ export interface LinkPairingData {
   expiresIn: number;
 }
 
+// --- Saved session state for resume ---
+
+/** State needed to resume a session without a full Noise XX handshake. */
+export interface SavedSessionState {
+  /** 16-byte session identifier. */
+  sessionId: Uint8Array;
+  /** Exported DoubleRatchet state (JSON-serializable object). */
+  ratchetState: object;
+  /** Next sequence number to send. */
+  sequenceTx: number;
+  /** Last sequence number received. */
+  sequenceRx: number;
+  /** Timestamp (ms) when the session was saved. */
+  savedAt: number;
+}
+
+/** Maximum age of a saved session before it is considered expired (5 minutes). */
+const SESSION_RESUME_MAX_AGE_MS = 5 * 60 * 1000;
+
+/** Maximum allowed clock skew for resume timestamps (5 minutes). */
+const SESSION_RESUME_TIMESTAMP_WINDOW_SEC = 5 * 60;
+
 // --- Application message type range ---
 
 const APP_MSG_TYPE_MIN = 0xf000;
@@ -135,8 +161,42 @@ export class NodeSession {
   private _remotePeerId: any = null;
   /** Guard to prevent concurrent outbox drains. */
   private _draining = false;
+  /** 16-byte session identifier for resumption. */
+  private _sessionId: Uint8Array | null = null;
+  /** Last received sequence number (for resume sync). */
+  private _sequenceRx = 0;
 
   constructor(readonly peerId: string) {}
+
+  /** Get the session ID (16 bytes, or null if not set). */
+  get sessionId(): Uint8Array | null {
+    return this._sessionId;
+  }
+
+  /** Set the session ID (called during connect/resume). */
+  _setSessionId(id: Uint8Array): void {
+    this._sessionId = id;
+  }
+
+  /** Get the transmit sequence counter. */
+  get sequenceTx(): number {
+    return this._sequenceCounter;
+  }
+
+  /** Get the receive sequence counter. */
+  get sequenceRx(): number {
+    return this._sequenceRx;
+  }
+
+  /** Set the transmit sequence counter (for resume). */
+  _setSequenceTx(n: number): void {
+    this._sequenceCounter = n;
+  }
+
+  /** Set the receive sequence counter (for resume). */
+  _setSequenceRx(n: number): void {
+    this._sequenceRx = n;
+  }
 
   /** Wire this session to a libp2p node and remote PeerId for transport. */
   _setTransport(libp2pNode: any, remotePeerId: any): void {
@@ -426,6 +486,14 @@ export class Node {
    *  When provided to startTransport(), produces a deterministic libp2p PeerId.
    *  null means a random identity will be generated. */
   private _libp2pPrivateKeySeed: Uint8Array | null = null;
+  /**
+   * Saved session states for resumption, keyed by remote libp2p PeerId string.
+   * Populated after a successful handshake so that future connections can
+   * skip the full Noise XX exchange.
+   */
+  private readonly _savedSessions = new Map<string, SavedSessionState>();
+  /** Listeners called when a session state is saved (for external persistence). */
+  private readonly _sessionSavedListeners: Array<(peerId: string, state: SavedSessionState) => void> = [];
 
   private constructor(config: ResolvedConfig) {
     this._config = config;
@@ -537,6 +605,9 @@ export class Node {
         } else if (requestEnv.type === HANDSHAKE_FINISH) {
           // --- Inbound handshake round 2 ---
           await this._handleHandshakeFinish(requestEnv, remotePeerIdStr, stream, connection.remotePeer);
+        } else if (requestEnv.type === SESSION_RESUME) {
+          // --- Session resume ---
+          await this._handleSessionResume(requestEnv, remotePeerIdStr, stream, connection.remotePeer);
         } else if (requestEnv.type === DATA_MESSAGE || !isHandshakeType(requestEnv.type)) {
           // --- Regular data message ---
           const session = this._sessions.get(remotePeerIdStr);
@@ -649,6 +720,16 @@ export class Node {
 
   onError(callback: (error: CairnError) => void): void {
     this._errorListeners.push(callback);
+  }
+
+  /**
+   * Register a callback invoked after a session's state is saved for resumption.
+   *
+   * This is called after every successful handshake (both initiator and responder).
+   * Consumers can use this to persist the state to IndexedDB, disk, etc.
+   */
+  onSessionSaved(callback: (peerId: string, state: SavedSessionState) => void): void {
+    this._sessionSavedListeners.push(callback);
   }
 
   /**
@@ -962,9 +1043,133 @@ export class Node {
     const ratchet = DoubleRatchet.initSender(hsResult.sessionKey, dhPublicBytes);
 
     const session = new NodeSession(remotePeerId);
+    const sessionId = crypto.getRandomValues(new Uint8Array(16));
+    session._setSessionId(sessionId);
     session._setRatchet(ratchet);
     session._setTransport(this._libp2pNode, remotePid);
     this._sessions.set(remotePeerId, session);
+
+    // Save session state for future resumption
+    this._saveSessionForResume(remotePeerId, session);
+
+    return session;
+  }
+
+  /**
+   * Resume a session with a remote peer without a full Noise XX handshake.
+   *
+   * Uses the saved DoubleRatchet state and a resumption proof to prove
+   * prior session ownership in a single round-trip.
+   *
+   * @param remotePeerId - The remote peer's libp2p PeerId string
+   * @param addrs - Multiaddr strings for the remote peer
+   * @param savedState - Previously exported session state
+   * @throws CairnError with code 'SESSION_EXPIRED' if the host rejects the resume
+   */
+  async tryResumeTransport(
+    remotePeerId: string,
+    addrs: string[],
+    savedState: {
+      sessionId: Uint8Array;
+      ratchetState: object;
+      sequenceTx: number;
+      sequenceRx: number;
+    },
+  ): Promise<NodeSession> {
+    if (!this._libp2pNode) {
+      throw new CairnError('TRANSPORT', 'transport not started');
+    }
+
+    const { encode } = await import('cborg');
+    const { multiaddr } = await import('@multiformats/multiaddr');
+    const { peerIdFromString } = await import('@libp2p/peer-id');
+    const { CAIRN_PROTOCOL, encodeFrame, readFrame } = await import('./transport/libp2p-node.js');
+
+    const remotePid = peerIdFromString(remotePeerId);
+
+    // Dial the remote peer (same as connectTransport)
+    let connected = false;
+    for (const addrStr of addrs) {
+      try {
+        const withPeerId = addrStr.includes('/p2p/')
+          ? addrStr
+          : `${addrStr}/p2p/${remotePeerId}`;
+        const ma = multiaddr(withPeerId);
+        await this._libp2pNode.dial(ma);
+        connected = true;
+        break;
+      } catch (e) {
+        console.warn(`[cairn] resume dial ${addrStr} failed:`, e);
+      }
+    }
+    if (!connected) {
+      throw new CairnError('TRANSPORT', `could not dial any address for peer ${remotePeerId}`);
+    }
+
+    // Restore ratchet and derive resumption key
+    const ratchet = DoubleRatchet.fromExportedState(savedState.ratchetState);
+    const resumptionKey = ratchet.deriveResumptionKey();
+
+    // Generate proof
+    const nonce = crypto.getRandomValues(new Uint8Array(16));
+    const timestamp = Math.floor(Date.now() / 1000);
+    const sessionId = savedState.sessionId instanceof Uint8Array
+      ? savedState.sessionId
+      : new Uint8Array(savedState.sessionId);
+    const proof = generateResumeProof(resumptionKey, sessionId, nonce, timestamp);
+
+    // Build SESSION_RESUME payload as CBOR map
+    const resumePayload = encode(new Map<string, unknown>([
+      ['session_id', sessionId],
+      ['proof', proof],
+      ['last_rx_sequence', savedState.sequenceRx],
+      ['nonce', nonce],
+      ['timestamp', timestamp],
+    ]));
+
+    const resumeEnvelope: MessageEnvelope = {
+      version: 1,
+      type: SESSION_RESUME,
+      msgId: newMsgId(),
+      payload: resumePayload,
+    };
+
+    // Send SESSION_RESUME, read response
+    const stream = await this._libp2pNode.dialProtocol(remotePid, CAIRN_PROTOCOL);
+    const resumeFrame = encodeFrame(encodeEnvelope(resumeEnvelope));
+    await stream.sink((async function* () {
+      yield resumeFrame;
+    })());
+
+    const responseBytes = await readFrame(stream.source);
+    const responseEnv = decodeEnvelope(responseBytes);
+
+    if (responseEnv.type === SESSION_EXPIRED) {
+      throw new CairnError('SESSION_EXPIRED', 'remote peer rejected session resume');
+    }
+
+    if (responseEnv.type !== SESSION_RESUME_ACK) {
+      throw new CairnError('PROTOCOL', `expected SESSION_RESUME_ACK, got 0x${responseEnv.type.toString(16).padStart(4, '0')}`);
+    }
+
+    // Parse ACK payload to get remote's last_rx_sequence
+    const { decode: cborDecode } = await import('cborg');
+    const ackPayload = cborDecode(responseEnv.payload, { useMaps: true }) as Map<string, unknown>;
+    const remoteLastRx = (ackPayload.get('last_rx_sequence') ?? 0) as number;
+
+    // Create session with restored ratchet
+    const session = new NodeSession(remotePeerId);
+    session._setSessionId(sessionId);
+    session._setRatchet(ratchet);
+    session._setTransport(this._libp2pNode, remotePid);
+    session._setSequenceTx(savedState.sequenceTx);
+    session._setSequenceRx(savedState.sequenceRx);
+    this._sessions.set(remotePeerId, session);
+
+    // Save updated session state
+    this._saveSessionForResume(remotePeerId, session);
+
+    console.log(`[cairn] Session resumed with ${remotePeerId} (remote lastRx=${remoteLastRx})`);
     return session;
   }
 
@@ -1039,9 +1244,14 @@ export class Node {
     const ratchet = DoubleRatchet.initReceiver(out.result.sessionKey, dhKeypair);
 
     const session = new NodeSession(remotePeerIdStr);
+    const sessionId = crypto.getRandomValues(new Uint8Array(16));
+    session._setSessionId(sessionId);
     session._setRatchet(ratchet);
     session._setTransport(this._libp2pNode, remotePeerId);
     this._sessions.set(remotePeerIdStr, session);
+
+    // Save session state for future resumption
+    this._saveSessionForResume(remotePeerIdStr, session);
 
     // Send ACK
     const ackEnv: MessageEnvelope = {
@@ -1055,6 +1265,158 @@ export class Node {
     await stream.sink((async function* () {
       yield ackFrame;
     })());
+  }
+
+  /**
+   * Handle an inbound SESSION_RESUME message.
+   *
+   * Validates the resume proof against saved session state, and if valid,
+   * restores the session with the saved ratchet. Sends SESSION_RESUME_ACK
+   * on success or SESSION_EXPIRED on failure.
+   */
+  private async _handleSessionResume(
+    requestEnv: MessageEnvelope,
+    remotePeerIdStr: string,
+    stream: any,
+    remotePeerId: any,
+  ): Promise<void> {
+    const { encode: cborEncode, decode: cborDecode } = await import('cborg');
+    const { encodeFrame } = await import('./transport/libp2p-node.js');
+
+    // Helper to send SESSION_EXPIRED and return
+    const sendExpired = async () => {
+      const expiredEnv: MessageEnvelope = {
+        version: 1,
+        type: SESSION_EXPIRED,
+        msgId: newMsgId(),
+        payload: new Uint8Array(0),
+      };
+      const expiredFrame = encodeFrame(encodeEnvelope(expiredEnv));
+      await stream.sink((async function* () {
+        yield expiredFrame;
+      })());
+    };
+
+    try {
+      // Decode the resume payload
+      const payloadMap = cborDecode(requestEnv.payload, { useMaps: true }) as Map<string, unknown>;
+      const sessionId = payloadMap.get('session_id') as Uint8Array;
+      const proof = payloadMap.get('proof') as Uint8Array;
+      const lastRxSequence = (payloadMap.get('last_rx_sequence') ?? 0) as number;
+      const nonce = payloadMap.get('nonce') as Uint8Array;
+      const timestamp = payloadMap.get('timestamp') as number;
+
+      if (!sessionId || !proof || !nonce || timestamp === undefined) {
+        console.warn('[cairn] SESSION_RESUME: missing fields');
+        await sendExpired();
+        return;
+      }
+
+      // Look up saved session by session ID
+      const sessionIdHex = bytesToHex(sessionId);
+      let savedState: SavedSessionState | undefined;
+      for (const [, state] of this._savedSessions) {
+        if (bytesToHex(state.sessionId) === sessionIdHex) {
+          savedState = state;
+          break;
+        }
+      }
+
+      if (!savedState) {
+        console.warn('[cairn] SESSION_RESUME: no saved session for ID', sessionIdHex);
+        await sendExpired();
+        return;
+      }
+
+      // Check timestamp freshness (within 5 minutes)
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (Math.abs(nowSec - timestamp) > SESSION_RESUME_TIMESTAMP_WINDOW_SEC) {
+        console.warn('[cairn] SESSION_RESUME: timestamp out of range');
+        await sendExpired();
+        return;
+      }
+
+      // Restore ratchet and verify proof
+      const ratchet = DoubleRatchet.fromExportedState(savedState.ratchetState);
+      const resumptionKey = ratchet.deriveResumptionKey();
+
+      if (!verifyResumeProof(resumptionKey, sessionId, nonce, timestamp, proof)) {
+        console.warn('[cairn] SESSION_RESUME: invalid proof');
+        await sendExpired();
+        return;
+      }
+
+      // Valid! Create restored session
+      const session = new NodeSession(remotePeerIdStr);
+      session._setSessionId(sessionId);
+      session._setRatchet(ratchet);
+      session._setTransport(this._libp2pNode, remotePeerId);
+      session._setSequenceTx(savedState.sequenceTx);
+      session._setSequenceRx(savedState.sequenceRx);
+      this._sessions.set(remotePeerIdStr, session);
+
+      // Save updated state
+      this._saveSessionForResume(remotePeerIdStr, session);
+
+      // Send ACK with our last_rx_sequence
+      const ackPayload = cborEncode(new Map<string, unknown>([
+        ['last_rx_sequence', savedState.sequenceRx],
+      ]));
+
+      const ackEnv: MessageEnvelope = {
+        version: 1,
+        type: SESSION_RESUME_ACK,
+        msgId: newMsgId(),
+        payload: ackPayload,
+      };
+
+      const ackFrame = encodeFrame(encodeEnvelope(ackEnv));
+      await stream.sink((async function* () {
+        yield ackFrame;
+      })());
+
+      console.log(`[cairn] Session resume accepted for ${remotePeerIdStr}`);
+    } catch (err) {
+      console.error('[cairn] SESSION_RESUME handler error:', err);
+      await sendExpired();
+    }
+  }
+
+  /**
+   * Save session state internally and notify listeners.
+   * Called after a successful handshake or resume.
+   */
+  private _saveSessionForResume(remotePeerIdStr: string, session: NodeSession): void {
+    if (!session.ratchet || !session.sessionId) return;
+
+    const state: SavedSessionState = {
+      sessionId: new Uint8Array(session.sessionId),
+      ratchetState: session.ratchet.exportStateObject(),
+      sequenceTx: session.sequenceTx,
+      sequenceRx: session.sequenceRx,
+      savedAt: Date.now(),
+    };
+
+    this._savedSessions.set(remotePeerIdStr, state);
+
+    // Notify listeners
+    for (const listener of this._sessionSavedListeners) {
+      try {
+        listener(remotePeerIdStr, state);
+      } catch (e) {
+        console.error('[cairn] sessionSaved listener error:', e);
+      }
+    }
+  }
+
+  /** Get a saved session state by peer ID (for testing/external persistence). */
+  getSavedSession(peerId: string): SavedSessionState | undefined {
+    return this._savedSessions.get(peerId);
+  }
+
+  /** Restore a saved session state (for loading from external persistence). */
+  restoreSavedSession(peerId: string, state: SavedSessionState): void {
+    this._savedSessions.set(peerId, state);
   }
 
   /** Get a session by peer ID string (for testing). */

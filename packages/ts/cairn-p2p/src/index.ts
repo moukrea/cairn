@@ -9,6 +9,7 @@ export type {
   PinPairingData,
   LinkPairingData,
   ResolvedConfig,
+  SavedSessionState,
 } from './node.js';
 
 // Configuration types
