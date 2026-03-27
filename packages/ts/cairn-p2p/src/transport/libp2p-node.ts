@@ -71,6 +71,13 @@ export function isBrowserEnvironment(): boolean {
 /** Options for creating a cairn libp2p node. */
 export interface CreateNodeOptions {
   config?: Partial<TransportConfig>;
+  /**
+   * Ed25519 private key seed (32 bytes) for deterministic libp2p PeerId.
+   * When provided, the libp2p node will use this seed to derive its keypair
+   * instead of generating a random one. This allows session persistence
+   * across page reloads — the host identifies the browser by its libp2p PeerId.
+   */
+  privateKeySeed?: Uint8Array;
 }
 
 /**
@@ -120,7 +127,16 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
     listenAddrs.push('/ip4/0.0.0.0/tcp/0/ws');
   }
 
+  // If a private key seed is provided, derive a deterministic keypair
+  // so the libp2p PeerId stays the same across restarts/page reloads.
+  let privateKey: any;
+  if (options?.privateKeySeed) {
+    const { generateKeyPairFromSeed } = await import('@libp2p/crypto/keys');
+    privateKey = await generateKeyPairFromSeed('Ed25519', options.privateKeySeed);
+  }
+
   const node = await createLibp2p({
+    ...(privateKey ? { privateKey } : {}),
     addresses: { listen: listenAddrs },
     transports: transports as any[],
     streamMuxers: [yamux()],

@@ -11,6 +11,7 @@ use crate::error::{CairnError, Result};
 const HKDF_INFO_ROOT_CHAIN: &[u8] = b"cairn-root-chain-v1";
 const HKDF_INFO_CHAIN_ADVANCE: &[u8] = b"cairn-chain-advance-v1";
 const HKDF_INFO_MESSAGE_ENCRYPT: &[u8] = b"cairn-msg-encrypt-v1";
+const HKDF_INFO_SESSION_RESUME: &[u8] = b"cairn-session-resume-v1";
 
 /// Configuration for the Double Ratchet.
 #[derive(Debug, Clone)]
@@ -280,6 +281,22 @@ impl DoubleRatchet {
         let state: RatchetState = serde_json::from_slice(data)
             .map_err(|e| CairnError::Crypto(format!("ratchet state deserialization: {e}")))?;
         Ok(Self { state, config })
+    }
+
+    /// Derive a session resumption key from the root key using HKDF.
+    ///
+    /// The resumption key is purpose-specific and never exposes the raw root key.
+    /// It changes with each DH ratchet step, providing forward secrecy for the
+    /// session resume proof.
+    pub fn derive_resumption_key(&self) -> Result<[u8; 32]> {
+        let mut output = [0u8; 32];
+        exchange::hkdf_sha256(
+            &self.state.root_key,
+            None,
+            HKDF_INFO_SESSION_RESUME,
+            &mut output,
+        )?;
+        Ok(output)
     }
 
     /// Skip message keys up to (but not including) the given message number

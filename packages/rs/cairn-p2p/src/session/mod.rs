@@ -5,6 +5,7 @@
 
 pub mod channel;
 pub mod heartbeat;
+pub mod persistence;
 pub mod queue;
 pub mod reconnection;
 pub mod state_machine;

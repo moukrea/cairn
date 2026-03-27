@@ -251,24 +251,21 @@ export class NodeSession {
     if (this._draining) return;
     this._draining = true;
     try {
-      const { CAIRN_PROTOCOL, encodeFrame, readFrame } = await import('./transport/libp2p-node.js');
+      const { CAIRN_PROTOCOL, encodeFrame } = await import('./transport/libp2p-node.js');
       while (this.outbox.length > 0) {
         const envelopeBytes = this.outbox.shift()!;
         try {
           const stream = await this._libp2pNode.dialProtocol(this._remotePeerId, CAIRN_PROTOCOL);
           const frame = encodeFrame(envelopeBytes);
 
-          // Write the frame and close the write side
+          // Write the frame and close the write side.
+          // Do NOT wait for a response -- the remote sends responses on
+          // a separate stream (via its own dialProtocol), not as a reply
+          // on this stream.  Waiting on readFrame() here would block the
+          // drain loop forever.
           await stream.sink((async function* () {
             yield frame;
           })());
-
-          // Read the response (even if empty, to complete the request-response cycle)
-          try {
-            await readFrame(stream.source);
-          } catch {
-            // Response may be empty for data messages
-          }
         } catch (e) {
           console.error('[cairn] drain send failed:', e);
           this.outbox.unshift(envelopeBytes);
@@ -277,6 +274,14 @@ export class NodeSession {
       }
     } finally {
       this._draining = false;
+      // Re-check: messages may have been enqueued while we were draining.
+      // Without this, a send() that arrived during drain would see _draining=true,
+      // return early, and the message would sit in the outbox forever.
+      if (this.outbox.length > 0 && this._libp2pNode && this._remotePeerId) {
+        this._drainOutbox().catch((e) => {
+          console.error('[cairn] _drainOutbox re-check error:', e);
+        });
+      }
     }
   }
 
@@ -348,6 +353,7 @@ export class NodeSession {
       }
 
       // Dispatch to all channel message callbacks
+      console.log('[cairn] dispatchIncoming: DATA_MESSAGE', plaintext.length, 'bytes plaintext, handlers:', this._messageHandlers.size);
       for (const [, cbs] of this._messageHandlers) {
         for (const cb of cbs) {
           cb(plaintext);
@@ -416,6 +422,10 @@ export class Node {
    * Stores the Noise responder and X25519 DH keypair from round 1.
    */
   private readonly _inboundHandshakes = new Map<string, { responder: NoiseXXHandshake; dhKeypair: X25519Keypair }>();
+  /** Ed25519 private key seed (32 bytes) for the libp2p identity.
+   *  When provided to startTransport(), produces a deterministic libp2p PeerId.
+   *  null means a random identity will be generated. */
+  private _libp2pPrivateKeySeed: Uint8Array | null = null;
 
   private constructor(config: ResolvedConfig) {
     this._config = config;
@@ -426,6 +436,28 @@ export class Node {
     const resolved = resolveConfig(config);
     const node = new Node(resolved);
     node._identity = await IdentityKeypair.generate();
+    return node;
+  }
+
+  /**
+   * Create a cairn node with a specific libp2p identity seed.
+   *
+   * This produces a deterministic libp2p PeerId, which is critical for
+   * session persistence: the host identifies the browser by its PeerId,
+   * so restoring the same seed after a page refresh allows the host
+   * to recognize the reconnecting peer.
+   *
+   * @param config - Optional partial CairnConfig
+   * @param libp2pSeed - 32-byte Ed25519 seed for the libp2p PeerId
+   */
+  static async createWithIdentity(
+    config: Partial<CairnConfig> | undefined,
+    libp2pSeed: Uint8Array,
+  ): Promise<Node> {
+    const resolved = resolveConfig(config);
+    const node = new Node(resolved);
+    node._identity = await IdentityKeypair.generate();
+    node._libp2pPrivateKeySeed = new Uint8Array(libp2pSeed);
     return node;
   }
 
@@ -483,7 +515,9 @@ export class Node {
    */
   async startTransport(): Promise<void> {
     const { createCairnNode, CAIRN_PROTOCOL, encodeFrame, readFrame } = await import("./transport/libp2p-node.js");
-    const libp2pNode = await createCairnNode();
+    const libp2pNode = await createCairnNode({
+      ...(this._libp2pPrivateKeySeed ? { privateKeySeed: this._libp2pPrivateKeySeed } : {}),
+    });
     await libp2pNode.start();
     this._libp2pNode = libp2pNode;
 
@@ -515,8 +549,8 @@ export class Node {
             yield ackFrame;
           })());
         }
-      } catch {
-        // Protocol error — close stream silently
+      } catch (err) {
+        console.error('[cairn] Protocol handler error:', err);
         try { await stream.close(); } catch { /* ignore */ }
       }
     });
@@ -554,6 +588,53 @@ export class Node {
   /** Get the node's peer ID. */
   get peerId(): Uint8Array | null {
     return this._identity?.peerId() ?? null;
+  }
+
+  /**
+   * Get the libp2p private key seed (32 bytes) for persisting the identity.
+   *
+   * After startTransport(), this returns the seed that was used to create
+   * the libp2p node. If the node was created without a seed, this extracts
+   * the seed from the running libp2p node so it can be saved and reused
+   * on future createWithIdentity() calls.
+   *
+   * Returns null if transport has not been started.
+   */
+  get libp2pPrivateKeySeed(): Uint8Array | null {
+    if (this._libp2pPrivateKeySeed) {
+      return new Uint8Array(this._libp2pPrivateKeySeed);
+    }
+    // Extract from the running libp2p node if available
+    if (this._libp2pNode) {
+      try {
+        const pk = (this._libp2pNode as any).privateKey;
+        if (pk && pk.raw && pk.raw.length >= 32) {
+          // libp2p Ed25519 raw key is 64 bytes: [32-byte seed][32-byte pubkey]
+          const seed = pk.raw.slice(0, 32);
+          this._libp2pPrivateKeySeed = new Uint8Array(seed);
+          return new Uint8Array(seed);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get the libp2p PeerId string.
+   * Returns the string representation of the libp2p peer ID (e.g. "12D3KooW...").
+   * Returns null if transport has not been started.
+   */
+  get libp2pPeerId(): string | null {
+    if (this._libp2pNode) {
+      try {
+        return (this._libp2pNode as any).peerId.toString();
+      } catch {
+        // ignore
+      }
+    }
+    return null;
   }
 
   // --- Event listeners ---
