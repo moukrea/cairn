@@ -109,13 +109,16 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
   } else {
     // Browser transports — WebSocket is the primary transport for
     // connecting to Rust/Node.js hosts that listen on /ws multiaddrs.
-    // WebRTC and WebTransport are omitted: WebRTC requires the identify
-    // service and additional config; WebTransport requires HTTP/3 support.
-    // These can be added later for browser-to-browser use cases.
     if (config.websocketEnabled) {
       const { webSockets } = await import('@libp2p/websockets');
       const { all } = await import('@libp2p/websockets/filters');
       transports.push(webSockets({ filter: all }));
+    }
+    // Circuit Relay v2 transport allows the browser to connect to hosts
+    // behind NAT via relay nodes (e.g., /p2p-circuit addresses).
+    if (config.circuitRelayEnabled) {
+      const { circuitRelayTransport } = await import('@libp2p/circuit-relay-v2');
+      transports.push(circuitRelayTransport());
     }
   }
 
@@ -135,12 +138,21 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
     privateKey = await generateKeyPairFromSeed('Ed25519', options.privateKeySeed);
   }
 
+  // Build the services object. In browsers, add identify (required for
+  // circuit relay and WebRTC) and optionally bootstrap for DHT discovery.
+  const services: Record<string, unknown> = {};
+  if (!isNodeEnvironment()) {
+    const { identify } = await import('@libp2p/identify');
+    services.identify = identify();
+  }
+
   const node = await createLibp2p({
     ...(privateKey ? { privateKey } : {}),
     addresses: { listen: listenAddrs },
     transports: transports as any[],
     streamMuxers: [yamux()],
     connectionEncrypters: [noise()],
+    services,
     connectionManager: {
       minConnections: 0,
       maxConnections: 50,

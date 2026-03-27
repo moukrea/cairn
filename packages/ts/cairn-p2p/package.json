@@ -20,7 +20,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts && tsup src/browser.ts --format esm,cjs --dts --no-splitting --external @libp2p/tcp --external @libp2p/webrtc --external @libp2p/websockets --external @libp2p/webtransport --external @libp2p/circuit-relay-v2 --external @chainsafe/libp2p-noise --external libp2p --external @multiformats/multiaddr --external @libp2p/peer-id --external @libp2p/crypto",
+    "build": "tsup src/index.ts --format esm,cjs --dts && tsup src/browser.ts --format esm,cjs --dts --no-splitting --external @libp2p/tcp --external @libp2p/webrtc --external @libp2p/websockets --external @libp2p/webtransport --external @libp2p/circuit-relay-v2 --external @libp2p/identify --external @libp2p/bootstrap --external @chainsafe/libp2p-noise --external libp2p --external @multiformats/multiaddr --external @libp2p/peer-id --external @libp2p/crypto",
     "test": "vitest run",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
@@ -28,7 +28,9 @@
   "dependencies": {
     "@chainsafe/libp2p-noise": "^16.0.0",
     "@chainsafe/libp2p-yamux": "^7.0.4",
+    "@libp2p/bootstrap": "^12.0.14",
     "@libp2p/circuit-relay-v2": "^2.0.0",
+    "@libp2p/identify": "^4.0.13",
     "@libp2p/interface": "^2.0.0",
     "@libp2p/kad-dht": "^13.0.0",
     "@libp2p/mdns": "^11.0.0",
