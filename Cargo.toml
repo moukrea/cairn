@@ -35,7 +35,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
-libp2p = { version = "0.54", features = ["tokio", "quic", "tcp", "websocket", "tls", "yamux", "noise", "dns", "macros", "ed25519", "mdns", "kad", "request-response"] }
+libp2p = { version = "0.54", features = ["tokio", "quic", "tcp", "websocket", "tls", "yamux", "noise", "dns", "macros", "ed25519", "mdns", "kad", "request-response", "identify", "relay", "dcutr", "autonat", "upnp"] }
 libp2p-identity = { version = "0.2", features = ["ed25519"] }
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 hkdf = "0.12"

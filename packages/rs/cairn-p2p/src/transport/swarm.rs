@@ -57,6 +57,8 @@ pub enum SwarmEvent {
         request_id: libp2p::request_response::OutboundRequestId,
         error: String,
     },
+    /// An external (public) address was discovered via Identify or AutoNAT.
+    ExternalAddressDiscovered { address: Multiaddr },
 }
 
 // ---------------------------------------------------------------------------
@@ -99,7 +101,7 @@ pub(crate) enum SwarmCommand {
 }
 
 // ---------------------------------------------------------------------------
-// SwarmController — handle returned to the caller
+// SwarmController -- handle returned to the caller
 // ---------------------------------------------------------------------------
 
 /// Handle for controlling the libp2p swarm from outside the event loop.
@@ -310,7 +312,7 @@ impl SwarmCommandSender {
 }
 
 // ---------------------------------------------------------------------------
-// CairnCodec — request-response codec for cairn's CBOR protocol
+// CairnCodec -- request-response codec for cairn's CBOR protocol
 // ---------------------------------------------------------------------------
 
 /// Cairn protocol stream protocol identifier.
@@ -432,11 +434,21 @@ mod behaviour {
     /// - mDNS for LAN peer discovery
     /// - Kademlia DHT for distributed peer/record lookup
     /// - Request-response for cairn's application-level CBOR protocol
+    /// - Identify for learning observed external addresses
+    /// - AutoNAT for NAT type detection and public address discovery
+    /// - Relay client for connecting through relay nodes (symmetric NAT fallback)
+    /// - DCUtR for upgrading relayed connections to direct via hole punching
+    /// - UPnP for automatic port mapping on supported routers
     #[derive(NetworkBehaviour)]
     pub(super) struct CairnBehaviour {
         pub(super) mdns: libp2p::mdns::tokio::Behaviour,
         pub(super) kademlia: libp2p::kad::Behaviour<libp2p::kad::store::MemoryStore>,
         pub(super) request_response: libp2p::request_response::Behaviour<super::CairnCodec>,
+        pub(super) identify: libp2p::identify::Behaviour,
+        pub(super) autonat: libp2p::autonat::Behaviour,
+        pub(super) relay_client: libp2p::relay::client::Behaviour,
+        pub(super) dcutr: libp2p::dcutr::Behaviour,
+        pub(super) upnp: libp2p::upnp::tokio::Behaviour,
     }
 }
 
@@ -445,7 +457,44 @@ use behaviour::CairnBehaviour;
 use behaviour::CairnBehaviourEvent;
 
 // ---------------------------------------------------------------------------
-// build_swarm — construct the libp2p Swarm and spawn the event loop
+// Default bootstrap nodes (public IPFS DHT)
+// ---------------------------------------------------------------------------
+
+/// Public IPFS bootstrap nodes for joining the global Kademlia DHT.
+/// These allow cairn peers to find each other across the internet without
+/// any cairn-specific infrastructure.
+pub const DEFAULT_BOOTSTRAP_NODES: &[&str] = &[
+    "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+    "/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+    "/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+    "/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
+];
+
+/// Extract the PeerId from the last `/p2p/<peer_id>` component of a multiaddr.
+fn extract_peer_id(addr: &Multiaddr) -> Option<PeerId> {
+    addr.iter().find_map(|proto| {
+        if let libp2p::multiaddr::Protocol::P2p(peer_id) = proto {
+            Some(peer_id)
+        } else {
+            None
+        }
+    })
+}
+
+/// Strip the trailing `/p2p/<peer_id>` component from a multiaddr, returning
+/// the address without the peer ID (needed for `kademlia.add_address`).
+fn strip_peer_id(addr: &Multiaddr) -> Multiaddr {
+    let mut clean = Multiaddr::empty();
+    for proto in addr.iter() {
+        if !matches!(proto, libp2p::multiaddr::Protocol::P2p(_)) {
+            clean.push(proto);
+        }
+    }
+    clean
+}
+
+// ---------------------------------------------------------------------------
+// build_swarm -- construct the libp2p Swarm and spawn the event loop
 // ---------------------------------------------------------------------------
 
 /// Build a libp2p Swarm with the configured transports and spawn an async
@@ -455,9 +504,10 @@ use behaviour::CairnBehaviourEvent;
 /// - QUIC v1 (priority 1 in the transport fallback chain)
 /// - TCP with Noise encryption and Yamux multiplexing (priority 3)
 /// - WebSocket/TLS with Noise encryption and Yamux multiplexing (priority 6)
+/// - Circuit Relay v2 client (fallback for symmetric NAT)
 ///
-/// The composed behaviour includes mDNS, Kademlia DHT, and request-response
-/// for cairn's application protocol.
+/// The composed behaviour includes mDNS, Kademlia DHT, request-response,
+/// Identify, AutoNAT, Relay Client, DCUtR, and UPnP.
 ///
 /// # Arguments
 /// * `identity` - The Ed25519 identity keypair used for Noise authentication
@@ -491,7 +541,9 @@ fn libp2p_keypair_from_identity(identity: &IdentityKeypair) -> Result<libp2p::id
 /// Inner swarm construction using the SwarmBuilder API.
 ///
 /// The SwarmBuilder uses a type-state pattern that requires a fixed call
-/// chain: identity -> runtime -> tcp -> quic -> dns -> websocket -> behaviour -> build.
+/// chain: identity -> runtime -> tcp -> quic -> dns -> websocket ->
+/// relay_client -> behaviour -> build.
+///
 /// All transports are always composed; the `TransportConfig` flags will be
 /// used at the transport-fallback layer to skip disabled transports.
 async fn build_swarm_inner(
@@ -515,7 +567,16 @@ async fn build_swarm_inner(
         )
         .await
         .map_err(|e| CairnError::Transport(format!("failed to configure WebSocket: {e}")))?
-        .with_behaviour(|key| {
+        // Circuit Relay v2 client -- enables connecting through relay nodes
+        // when direct connections fail (e.g., symmetric NAT on both sides).
+        // The relay client transport is composed into the transport stack so
+        // /p2p-circuit addresses can be dialed.
+        .with_relay_client(
+            (libp2p::tls::Config::new, libp2p::noise::Config::new),
+            libp2p::yamux::Config::default,
+        )
+        .map_err(|e| CairnError::Transport(format!("failed to configure relay client: {e}")))?
+        .with_behaviour(|key, relay_client| {
             let peer_id = key.public().to_peer_id();
 
             // mDNS for LAN discovery.
@@ -531,9 +592,35 @@ async fn build_swarm_inner(
             let mdns = libp2p::mdns::tokio::Behaviour::new(mdns_config, peer_id)
                 .map_err(|e| format!("mDNS init failed: {e}"))?;
 
-            // Kademlia DHT.
+            // Kademlia DHT with bootstrap nodes for internet-wide peer discovery.
             let store = libp2p::kad::store::MemoryStore::new(peer_id);
-            let kademlia = libp2p::kad::Behaviour::new(peer_id, store);
+            let mut kademlia = libp2p::kad::Behaviour::new(peer_id, store);
+
+            // Add bootstrap nodes (either from config or defaults).
+            let bootstrap_addrs: Vec<String> = if config.bootstrap_nodes.is_empty() {
+                DEFAULT_BOOTSTRAP_NODES.iter().map(|s| s.to_string()).collect()
+            } else {
+                config.bootstrap_nodes.clone()
+            };
+
+            let mut has_bootstrap_peers = false;
+            for addr_str in &bootstrap_addrs {
+                if let Ok(ma) = addr_str.parse::<Multiaddr>() {
+                    if let Some(peer_id) = extract_peer_id(&ma) {
+                        let addr = strip_peer_id(&ma);
+                        kademlia.add_address(&peer_id, addr);
+                        has_bootstrap_peers = true;
+                    }
+                }
+            }
+
+            // Start a Kademlia bootstrap query if we have peers to connect to.
+            if has_bootstrap_peers {
+                if let Err(e) = kademlia.bootstrap() {
+                    // Not fatal -- bootstrap may fail if no peers respond.
+                    debug!(?e, "Kademlia bootstrap initiation failed (will retry)");
+                }
+            }
 
             // Request-response for cairn's CBOR protocol.
             let request_response = libp2p::request_response::Behaviour::new(
@@ -545,10 +632,41 @@ async fn build_swarm_inner(
                     .with_request_timeout(std::time::Duration::from_secs(30)),
             );
 
+            // Identify -- peers exchange observed addresses on connect.
+            // This is how a node behind NAT learns its public address.
+            let identify = libp2p::identify::Behaviour::new(
+                libp2p::identify::Config::new(
+                    "/cairn/1.0.0".into(),
+                    key.public(),
+                )
+                .with_push_listen_addr_updates(true),
+            );
+
+            // AutoNAT -- probe whether we are publicly reachable.
+            // Uses connected peers to dial us back and determine NAT status.
+            let autonat = libp2p::autonat::Behaviour::new(
+                peer_id,
+                libp2p::autonat::Config::default(),
+            );
+
+            // DCUtR -- Direct Connection Upgrade through Relay.
+            // When two peers are connected via a relay, DCUtR coordinates
+            // a simultaneous connection attempt (hole punch) to establish
+            // a direct connection.
+            let dcutr = libp2p::dcutr::Behaviour::new(peer_id);
+
+            // UPnP -- automatically map ports on UPnP-capable routers.
+            let upnp = libp2p::upnp::tokio::Behaviour::default();
+
             Ok(CairnBehaviour {
                 mdns,
                 kademlia,
                 request_response,
+                identify,
+                autonat,
+                relay_client,
+                dcutr,
+                upnp,
             })
         })
         .map_err(|e| CairnError::Transport(format!("failed to create behaviour: {e}")))?
@@ -613,12 +731,6 @@ async fn run_event_loop(
                         let _ = reply.send(Ok(request_id));
                     }
                     Some(SwarmCommand::SendResponse { request_id, data, reply }) => {
-                        // The request-response behaviour keeps pending inbound
-                        // requests in its internal state. We need to retrieve
-                        // the response channel for this request_id.
-                        // Note: libp2p request_response sends response via the
-                        // channel stored during Event::Message::Request.
-                        // We store these channels in pending_inbound_requests.
                         if let Some(channel) = pending_inbound_requests.remove(&request_id) {
                             let result = swarm
                                 .behaviour_mut()
@@ -674,6 +786,10 @@ async fn run_event_loop(
                     LibSwarmEvent::NewListenAddr { address, .. } => {
                         info!(%address, "listening on new address");
                         Some(SwarmEvent::ListeningOn { address })
+                    }
+                    LibSwarmEvent::ExternalAddrConfirmed { address } => {
+                        info!(%address, "external address confirmed");
+                        Some(SwarmEvent::ExternalAddressDiscovered { address })
                     }
                     LibSwarmEvent::ConnectionEstablished {
                         peer_id,
@@ -788,6 +904,21 @@ async fn run_event_loop(
                         }
                         None
                     }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Kademlia(
+                        libp2p::kad::Event::OutboundQueryProgressed {
+                            result: libp2p::kad::QueryResult::Bootstrap(result),
+                            ..
+                        },
+                    )) => {
+                        match result {
+                            Ok(ok) => info!(
+                                num_remaining = ok.num_remaining,
+                                "Kademlia bootstrap progress"
+                            ),
+                            Err(e) => warn!(?e, "Kademlia bootstrap failed"),
+                        }
+                        None
+                    }
                     LibSwarmEvent::Behaviour(CairnBehaviourEvent::Kademlia(event)) => {
                         debug!(?event, "Kademlia event");
                         None
@@ -850,6 +981,115 @@ async fn run_event_loop(
                     LibSwarmEvent::Behaviour(CairnBehaviourEvent::RequestResponse(
                         libp2p::request_response::Event::ResponseSent { .. },
                     )) => None,
+                    // --- Identify behaviour events ---
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Identify(
+                        libp2p::identify::Event::Received { peer_id, info, .. },
+                    )) => {
+                        debug!(
+                            %peer_id,
+                            protocol_version = %info.protocol_version,
+                            observed_addr = %info.observed_addr,
+                            "identify: received peer info"
+                        );
+                        // Add the remote peer's listen addresses to Kademlia
+                        // so we can route to them through the DHT.
+                        for addr in &info.listen_addrs {
+                            swarm.behaviour_mut().kademlia.add_address(&peer_id, addr.clone());
+                        }
+                        // Register our observed address as an external address
+                        // candidate. libp2p will confirm it after multiple
+                        // observations and emit ExternalAddrConfirmed.
+                        swarm.add_external_address(info.observed_addr);
+                        None
+                    }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Identify(
+                        libp2p::identify::Event::Sent { peer_id, .. },
+                    )) => {
+                        debug!(%peer_id, "identify: sent our info");
+                        None
+                    }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Identify(
+                        libp2p::identify::Event::Error { peer_id, error, .. },
+                    )) => {
+                        debug!(%peer_id, %error, "identify: error");
+                        None
+                    }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Identify(
+                        libp2p::identify::Event::Pushed { peer_id, .. },
+                    )) => {
+                        debug!(%peer_id, "identify: pushed updated info");
+                        None
+                    }
+                    // --- AutoNAT behaviour events ---
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Autonat(
+                        libp2p::autonat::Event::InboundProbe(probe),
+                    )) => {
+                        debug!(?probe, "autonat: inbound probe");
+                        None
+                    }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Autonat(
+                        libp2p::autonat::Event::OutboundProbe(probe),
+                    )) => {
+                        debug!(?probe, "autonat: outbound probe");
+                        None
+                    }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Autonat(
+                        libp2p::autonat::Event::StatusChanged { old, new },
+                    )) => {
+                        info!(?old, ?new, "autonat: NAT status changed");
+                        None
+                    }
+                    // --- Relay client behaviour events ---
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::RelayClient(event)) => {
+                        debug!(?event, "relay client event");
+                        None
+                    }
+                    // --- DCUtR (hole punching) behaviour events ---
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Dcutr(event)) => {
+                        let remote = event.remote_peer_id;
+                        match event.result {
+                            Ok(connection_id) => {
+                                info!(
+                                    %remote,
+                                    ?connection_id,
+                                    "dcutr: direct connection upgrade succeeded (hole punch!)"
+                                );
+                            }
+                            Err(error) => {
+                                warn!(
+                                    %remote,
+                                    %error,
+                                    "dcutr: direct connection upgrade failed"
+                                );
+                            }
+                        }
+                        None
+                    }
+                    // --- UPnP behaviour events ---
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Upnp(
+                        libp2p::upnp::Event::NewExternalAddr(addr),
+                    )) => {
+                        info!(%addr, "upnp: new external address mapped");
+                        Some(SwarmEvent::ExternalAddressDiscovered { address: addr })
+                    }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Upnp(
+                        libp2p::upnp::Event::GatewayNotFound,
+                    )) => {
+                        debug!("upnp: no gateway found");
+                        None
+                    }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Upnp(
+                        libp2p::upnp::Event::NonRoutableGateway,
+                    )) => {
+                        debug!("upnp: gateway is not routable");
+                        None
+                    }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Upnp(
+                        libp2p::upnp::Event::ExpiredExternalAddr(addr),
+                    )) => {
+                        debug!(%addr, "upnp: external address mapping expired");
+                        None
+                    }
                     _ => None,
                 };
 
@@ -995,6 +1235,7 @@ mod tests {
             config.per_transport_timeout,
             std::time::Duration::from_secs(10)
         );
+        assert!(config.bootstrap_nodes.is_empty());
     }
 
     #[test]
@@ -1002,5 +1243,59 @@ mod tests {
         let identity = IdentityKeypair::generate();
         let keypair = libp2p_keypair_from_identity(&identity);
         assert!(keypair.is_ok(), "keypair conversion should succeed");
+    }
+
+    #[test]
+    fn extract_peer_id_from_multiaddr() {
+        let addr: Multiaddr = "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"
+            .parse()
+            .unwrap();
+        let peer_id = extract_peer_id(&addr);
+        assert!(peer_id.is_some(), "should extract peer ID from multiaddr");
+    }
+
+    #[test]
+    fn strip_peer_id_from_multiaddr() {
+        let addr: Multiaddr = "/ip4/1.2.3.4/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"
+            .parse()
+            .unwrap();
+        let stripped = strip_peer_id(&addr);
+        let stripped_str = stripped.to_string();
+        assert!(
+            !stripped_str.contains("/p2p/"),
+            "should not contain /p2p/ after stripping, got: {stripped_str}"
+        );
+        assert!(
+            stripped_str.contains("/ip4/1.2.3.4/tcp/4001"),
+            "should retain address components, got: {stripped_str}"
+        );
+    }
+
+    #[test]
+    fn default_bootstrap_nodes_parse() {
+        for addr_str in DEFAULT_BOOTSTRAP_NODES {
+            let ma: Multiaddr = addr_str.parse().expect("default bootstrap node should parse");
+            assert!(
+                extract_peer_id(&ma).is_some(),
+                "bootstrap node should contain a peer ID: {addr_str}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn build_swarm_with_custom_bootstrap_nodes() {
+        let identity = IdentityKeypair::generate();
+        let config = TransportConfig {
+            bootstrap_nodes: vec![
+                "/ip4/1.2.3.4/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN".into(),
+            ],
+            ..TransportConfig::default()
+        };
+        let controller = build_swarm(&identity, &config).await;
+        assert!(
+            controller.is_ok(),
+            "swarm construction should succeed with custom bootstrap nodes"
+        );
+        controller.unwrap().shutdown().await.unwrap();
     }
 }
