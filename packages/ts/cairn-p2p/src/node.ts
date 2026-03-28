@@ -641,6 +641,41 @@ export class Node {
     return [...this._listenAddresses];
   }
 
+  /**
+   * Look up a PeerId on the DHT using a PIN-derived key.
+   * The host publishes HMAC("jaunt-pin-v1", PIN) → PeerId on the DHT.
+   * Returns the PeerId string or null if not found.
+   */
+  async lookupPinOnDht(pin: string): Promise<string | null> {
+    if (!this._libp2pNode) return null;
+    try {
+      // Compute the same HMAC key as the host
+      const { hmac } = await import('@noble/hashes/hmac');
+      const { sha256 } = await import('@noble/hashes/sha256');
+      const key = hmac(sha256, new TextEncoder().encode('jaunt-pin-v1'), new TextEncoder().encode(pin));
+
+      // Query the DHT for this key
+      const dht = (this._libp2pNode as any).services?.dht;
+      if (!dht) {
+        console.warn('[cairn] No DHT service available for PIN lookup');
+        return null;
+      }
+
+      // Use contentRouting to get the record
+      const contentRouting = (this._libp2pNode as any).contentRouting;
+      if (contentRouting?.get) {
+        const result = await contentRouting.get(key);
+        if (result) {
+          return new TextDecoder().decode(result);
+        }
+      }
+      return null;
+    } catch (e) {
+      console.warn('[cairn] DHT PIN lookup failed:', e);
+      return null;
+    }
+  }
+
   /** Get the node configuration. */
   get config(): ResolvedConfig {
     return this._config;

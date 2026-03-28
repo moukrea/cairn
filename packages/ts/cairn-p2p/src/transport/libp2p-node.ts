@@ -144,6 +144,12 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
   if (!isNodeEnvironment()) {
     const { identify } = await import('@libp2p/identify');
     services.identify = identify();
+
+    // Kademlia DHT — enables peer discovery and record lookup (PIN rendezvous)
+    try {
+      const { kadDHT } = await import('@libp2p/kad-dht');
+      services.dht = kadDHT({ clientMode: true });
+    } catch { /* @libp2p/kad-dht not available */ }
   }
 
   const node = await createLibp2p({
