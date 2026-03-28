@@ -75,7 +75,7 @@ pub struct ApiNode {
     /// None when transport has not been started (e.g., unit tests).
     swarm_sender: Option<SwarmCommandSender>,
     /// Listen addresses reported by the swarm after start_transport().
-    listen_addresses: RwLock<Vec<String>>,
+    listen_addresses: Arc<RwLock<Vec<String>>>,
     /// Pending handshake response waiters, keyed by remote libp2p PeerId string.
     /// connect_transport() registers here; the event loop forwards ResponseReceived to it.
     response_waiters: Arc<RwLock<HashMap<String, oneshot::Sender<Vec<u8>>>>>,
@@ -128,7 +128,7 @@ impl ApiNode {
             network_info: RwLock::new(NetworkInfo::default()),
             transport_connector: None,
             swarm_sender: None,
-            listen_addresses: RwLock::new(Vec::new()),
+            listen_addresses: Arc::new(RwLock::new(Vec::new())),
             response_waiters: Arc::new(RwLock::new(HashMap::new())),
             saved_sessions: Arc::new(RwLock::new(HashMap::new())),
             keystore,
@@ -246,6 +246,7 @@ impl ApiNode {
 
         let sender = controller.command_sender();
         let sender_for_loop = sender.clone();
+        let sender_for_dht = sender.clone();
         self.swarm_sender = Some(sender);
 
         // Load saved sessions from keystore for resume validation.
@@ -257,6 +258,96 @@ impl ApiNode {
             for s in loaded {
                 ss.insert(s.remote_libp2p_peer_id.clone(), s);
             }
+        }
+
+        // Spawn background task to publish our PeerId on the DHT for discovery.
+        // This allows other peers to find us by querying get_providers(our_peer_id).
+        // We wait a few seconds for Identify/bootstrap to complete, then publish.
+        if let Some(our_peer_id) = self.libp2p_peer_id() {
+            let dht_sender = sender_for_dht.clone();
+            let dht_event_tx = self.event_tx.clone();
+            let listen_addrs_ref = self.listen_addresses.clone();
+            tokio::spawn(async move {
+                // Wait for bootstrap and Identify to complete.
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+                // The DHT key is the PeerId bytes — this is the canonical
+                // lookup key for DHT-based peer discovery.
+                let peer_id_bytes = our_peer_id.to_bytes();
+
+                // Announce ourselves as a provider for our PeerId key.
+                match dht_sender.kad_start_providing(peer_id_bytes.clone()).await {
+                    Ok(()) => {
+                        tracing::info!(
+                            peer_id = %our_peer_id,
+                            "DHT: started providing (peer discoverable on DHT)"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            %e,
+                            "DHT: failed to start providing (peer NOT discoverable)"
+                        );
+                    }
+                }
+
+                // Also publish our listen addresses as a DHT record so
+                // peers that find us via get_providers can learn our addrs.
+                let addrs = listen_addrs_ref.read().await.clone();
+                if !addrs.is_empty() {
+                    // Encode addresses as a simple newline-separated string.
+                    let addrs_value = addrs.join("\n").into_bytes();
+                    match dht_sender
+                        .kad_put_record(peer_id_bytes.clone(), addrs_value)
+                        .await
+                    {
+                        Ok(()) => {
+                            tracing::info!(
+                                count = addrs.len(),
+                                "DHT: published listen addresses"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(%e, "DHT: failed to publish addresses");
+                        }
+                    }
+                }
+
+                // Emit DhtReady event so the host knows discovery is available.
+                let _ = dht_event_tx
+                    .send(Event::DhtReady {
+                        peer_id: our_peer_id.to_string(),
+                    })
+                    .await;
+
+                // Re-publish addresses periodically (every 30 minutes) to keep
+                // the DHT records fresh and include newly discovered external addrs.
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(1800)).await;
+
+                    let addrs = listen_addrs_ref.read().await.clone();
+                    // Also include external addresses discovered by Identify/UPnP.
+                    let mut all_addrs = addrs;
+                    let external = dht_sender.get_external_addresses().await;
+                    for ext in external {
+                        let ext_str = ext.to_string();
+                        if !all_addrs.contains(&ext_str) {
+                            all_addrs.push(ext_str);
+                        }
+                    }
+
+                    if !all_addrs.is_empty() {
+                        let addrs_value = all_addrs.join("\n").into_bytes();
+                        let _ = dht_sender
+                            .kad_put_record(peer_id_bytes.clone(), addrs_value)
+                            .await;
+                        tracing::debug!(
+                            count = all_addrs.len(),
+                            "DHT: re-published addresses"
+                        );
+                    }
+                }
+            });
         }
 
         // Spawn background task to bridge swarm events → node events.

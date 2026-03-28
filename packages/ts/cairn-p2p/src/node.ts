@@ -954,8 +954,8 @@ export class Node {
 
     const remotePid = peerIdFromString(remotePeerId);
 
-    // Dial the remote peer. Append /p2p/<peerId> if not already present
-    // so libp2p associates the address with the peer.
+    // Dial the remote peer. Try explicit addresses first, then PeerId-only
+    // (which triggers DHT discovery if Kademlia is configured).
     let connected = false;
     for (const addrStr of addrs) {
       try {
@@ -968,6 +968,18 @@ export class Node {
         break;
       } catch (e) {
         console.warn(`[cairn] dial ${addrStr} failed:`, e);
+      }
+    }
+    // If no explicit addresses worked (or none provided), try dialing by
+    // PeerId alone — libp2p will query Kademlia DHT for the peer's addresses.
+    if (!connected) {
+      try {
+        console.log(`[cairn] Trying DHT discovery for peer ${remotePeerId}...`);
+        await this._libp2pNode.dial(remotePid);
+        connected = true;
+        console.log(`[cairn] Connected via DHT discovery`);
+      } catch (e) {
+        console.warn(`[cairn] DHT discovery failed:`, e);
       }
     }
     if (!connected) {

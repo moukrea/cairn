@@ -56,6 +56,9 @@ pub enum Event {
     },
     /// An error occurred.
     Error { error: String },
+    /// DHT peer discovery is ready: our PeerId has been published on the
+    /// Kademlia DHT. Other peers can now find us by querying for our PeerId.
+    DhtReady { peer_id: String },
 }
 
 impl std::fmt::Display for Event {
@@ -94,6 +97,7 @@ impl std::fmt::Display for Event {
                 write!(f, "ChannelClosed({peer_id}, {channel_name})")
             }
             Event::Error { error } => write!(f, "Error({error})"),
+            Event::DhtReady { peer_id } => write!(f, "DhtReady({peer_id})"),
         }
     }
 }

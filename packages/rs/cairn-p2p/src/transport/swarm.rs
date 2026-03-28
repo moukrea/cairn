@@ -59,6 +59,8 @@ pub enum SwarmEvent {
     },
     /// An external (public) address was discovered via Identify or AutoNAT.
     ExternalAddressDiscovered { address: Multiaddr },
+    /// DHT peer discovery is ready: our PeerId has been published.
+    DhtReady,
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +98,22 @@ pub(crate) enum SwarmCommand {
     KadGetRecord {
         key: Vec<u8>,
         reply: oneshot::Sender<Result<Option<Vec<u8>>>>,
+    },
+    /// Announce ourselves as a provider for a key in the Kademlia DHT.
+    /// Used for DHT-based peer discovery: the key is derived from our PeerId.
+    KadStartProviding {
+        key: Vec<u8>,
+        reply: oneshot::Sender<Result<()>>,
+    },
+    /// Find providers for a key in the Kademlia DHT.
+    /// Returns a list of PeerIds that have announced themselves as providers.
+    KadGetProviders {
+        key: Vec<u8>,
+        reply: oneshot::Sender<Result<Vec<PeerId>>>,
+    },
+    /// Get all known external addresses of the local node.
+    GetExternalAddresses {
+        reply: oneshot::Sender<Vec<Multiaddr>>,
     },
     Shutdown,
 }
@@ -308,6 +326,56 @@ impl SwarmCommandSender {
         reply_rx
             .await
             .map_err(|_| CairnError::Transport("swarm event loop dropped reply".into()))?
+    }
+
+    /// Announce this node as a provider for the given key in the Kademlia DHT.
+    ///
+    /// Used for DHT-based peer discovery: the host publishes its PeerId-derived
+    /// key so clients can find it via `kad_get_providers`.
+    pub async fn kad_start_providing(&self, key: Vec<u8>) -> Result<()> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.command_tx
+            .send(SwarmCommand::KadStartProviding {
+                key,
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop shut down".into()))?;
+        reply_rx
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop dropped reply".into()))?
+    }
+
+    /// Find providers for a key in the Kademlia DHT.
+    ///
+    /// Used by clients to discover a host's PeerId and addresses on the DHT.
+    /// Returns the PeerIds of nodes that have announced themselves as providers.
+    pub async fn kad_get_providers(&self, key: Vec<u8>) -> Result<Vec<PeerId>> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.command_tx
+            .send(SwarmCommand::KadGetProviders {
+                key,
+                reply: reply_tx,
+            })
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop shut down".into()))?;
+        reply_rx
+            .await
+            .map_err(|_| CairnError::Transport("swarm event loop dropped reply".into()))?
+    }
+
+    /// Get all known external addresses of the local node.
+    pub async fn get_external_addresses(&self) -> Vec<Multiaddr> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        if self
+            .command_tx
+            .send(SwarmCommand::GetExternalAddresses { reply: reply_tx })
+            .await
+            .is_err()
+        {
+            return Vec::new();
+        }
+        reply_rx.await.unwrap_or_default()
     }
 }
 
@@ -594,7 +662,18 @@ async fn build_swarm_inner(
 
             // Kademlia DHT with bootstrap nodes for internet-wide peer discovery.
             let store = libp2p::kad::store::MemoryStore::new(peer_id);
-            let mut kademlia = libp2p::kad::Behaviour::new(peer_id, store);
+            let mut kad_config = libp2p::kad::Config::new(
+                libp2p::StreamProtocol::new("/ipfs/kad/1.0.0"),
+            );
+            // Set a reasonable record TTL (24 hours) and provider record TTL.
+            kad_config.set_record_ttl(Some(std::time::Duration::from_secs(86400)));
+            kad_config.set_provider_record_ttl(Some(std::time::Duration::from_secs(86400)));
+            // Re-publish provider records periodically (every 12 hours).
+            kad_config.set_provider_publication_interval(Some(std::time::Duration::from_secs(43200)));
+            let mut kademlia = libp2p::kad::Behaviour::with_config(peer_id, store, kad_config);
+            // Set mode to Server so this node participates fully in the DHT
+            // (stores and serves records for other peers).
+            kademlia.set_mode(Some(libp2p::kad::Mode::Server));
 
             // Add bootstrap nodes (either from config or defaults).
             let bootstrap_addrs: Vec<String> = if config.bootstrap_nodes.is_empty() {
@@ -696,6 +775,13 @@ async fn run_event_loop(
     let mut pending_kad_gets: std::collections::HashMap<libp2p::kad::QueryId, KadGetReply> =
         std::collections::HashMap::new();
 
+    // Pending Kademlia GET_PROVIDERS queries: query_id -> (reply sender, accumulated providers).
+    type KadGetProvidersReply = oneshot::Sender<Result<Vec<PeerId>>>;
+    let mut pending_kad_get_providers: std::collections::HashMap<
+        libp2p::kad::QueryId,
+        (KadGetProvidersReply, Vec<PeerId>),
+    > = std::collections::HashMap::new();
+
     // Pending inbound request-response channels for deferred responses.
     let mut pending_inbound_requests: std::collections::HashMap<
         libp2p::request_response::InboundRequestId,
@@ -769,6 +855,30 @@ async fn run_event_loop(
                             .kademlia
                             .get_record(record_key);
                         pending_kad_gets.insert(query_id, reply);
+                    }
+                    Some(SwarmCommand::KadStartProviding { key, reply }) => {
+                        let record_key = libp2p::kad::RecordKey::new(&key);
+                        let result = swarm
+                            .behaviour_mut()
+                            .kademlia
+                            .start_providing(record_key)
+                            .map(|_| ())
+                            .map_err(|e| {
+                                CairnError::Transport(format!("kad start_providing failed: {e:?}"))
+                            });
+                        let _ = reply.send(result);
+                    }
+                    Some(SwarmCommand::KadGetProviders { key, reply }) => {
+                        let record_key = libp2p::kad::RecordKey::new(&key);
+                        let query_id = swarm
+                            .behaviour_mut()
+                            .kademlia
+                            .get_providers(record_key);
+                        pending_kad_get_providers.insert(query_id, (reply, Vec::new()));
+                    }
+                    Some(SwarmCommand::GetExternalAddresses { reply }) => {
+                        let addrs: Vec<Multiaddr> = swarm.external_addresses().cloned().collect();
+                        let _ = reply.send(addrs);
                     }
                     Some(SwarmCommand::Shutdown) => {
                         info!("swarm event loop shutting down");
@@ -916,6 +1026,57 @@ async fn run_event_loop(
                                 "Kademlia bootstrap progress"
                             ),
                             Err(e) => warn!(?e, "Kademlia bootstrap failed"),
+                        }
+                        None
+                    }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Kademlia(
+                        libp2p::kad::Event::OutboundQueryProgressed {
+                            result: libp2p::kad::QueryResult::StartProviding(result),
+                            ..
+                        },
+                    )) => {
+                        match result {
+                            Ok(ok) => info!(
+                                key = ?ok.key,
+                                "Kademlia: started providing"
+                            ),
+                            Err(e) => warn!(?e, "Kademlia: start providing failed"),
+                        }
+                        None
+                    }
+                    LibSwarmEvent::Behaviour(CairnBehaviourEvent::Kademlia(
+                        libp2p::kad::Event::OutboundQueryProgressed {
+                            id,
+                            result: libp2p::kad::QueryResult::GetProviders(result),
+                            ..
+                        },
+                    )) => {
+                        match result {
+                            Ok(libp2p::kad::GetProvidersOk::FoundProviders { providers, .. }) => {
+                                debug!(count = providers.len(), "Kademlia: found providers");
+                                if let Some((_reply, accumulated)) = pending_kad_get_providers.get_mut(&id) {
+                                    for provider in providers {
+                                        if !accumulated.contains(&provider) {
+                                            accumulated.push(provider);
+                                        }
+                                    }
+                                }
+                            }
+                            Ok(libp2p::kad::GetProvidersOk::FinishedWithNoAdditionalRecord { .. }) => {
+                                // Query finished — send accumulated results.
+                                if let Some((reply, accumulated)) = pending_kad_get_providers.remove(&id) {
+                                    info!(count = accumulated.len(), "Kademlia: get_providers finished");
+                                    let _ = reply.send(Ok(accumulated));
+                                }
+                            }
+                            Err(e) => {
+                                warn!(?e, "Kademlia: get_providers failed");
+                                if let Some((reply, _)) = pending_kad_get_providers.remove(&id) {
+                                    let _ = reply.send(Err(CairnError::Transport(
+                                        format!("get_providers failed: {e:?}"),
+                                    )));
+                                }
+                            }
                         }
                         None
                     }
