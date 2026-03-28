@@ -642,33 +642,37 @@ export class Node {
   }
 
   /**
-   * Look up a PeerId on the DHT using a PIN-derived key.
-   * The host publishes HMAC("jaunt-pin-v1", PIN) → PeerId on the DHT.
+   * Look up a host's PeerId on the DHT using a PIN-derived key.
+   * The host registers as a Kademlia PROVIDER under HMAC("jaunt-pin-v1", PIN).
+   * We call get_providers() to find the host's PeerId.
    * Returns the PeerId string or null if not found.
    */
   async lookupPinOnDht(pin: string): Promise<string | null> {
     if (!this._libp2pNode) return null;
     try {
-      // Compute the same HMAC key as the host
       const { hmac } = await import('@noble/hashes/hmac');
       const { sha256 } = await import('@noble/hashes/sha256');
       const key = hmac(sha256, new TextEncoder().encode('jaunt-pin-v1'), new TextEncoder().encode(pin));
 
-      // Query the DHT for this key
-      const dht = (this._libp2pNode as any).services?.dht;
-      if (!dht) {
-        console.warn('[cairn] No DHT service available for PIN lookup');
+      // Use contentRouting.findProviders() — this queries the Kademlia DHT
+      // for peers that registered as providers for this key.
+      const contentRouting = (this._libp2pNode as any).contentRouting;
+      if (!contentRouting?.findProviders) {
+        console.warn('[cairn] No contentRouting.findProviders available');
         return null;
       }
 
-      // Use contentRouting to get the record
-      const contentRouting = (this._libp2pNode as any).contentRouting;
-      if (contentRouting?.get) {
-        const result = await contentRouting.get(key);
-        if (result) {
-          return new TextDecoder().decode(result);
+      console.log('[cairn] Querying DHT for PIN providers...');
+      // findProviders returns an async iterable of providers
+      for await (const provider of contentRouting.findProviders(key, { timeout: 15000 })) {
+        const peerId = provider.id?.toString?.() || provider.toString?.();
+        if (peerId) {
+          console.log('[cairn] Found provider via PIN:', peerId);
+          return peerId;
         }
       }
+
+      console.warn('[cairn] No providers found for PIN');
       return null;
     } catch (e) {
       console.warn('[cairn] DHT PIN lookup failed:', e);
