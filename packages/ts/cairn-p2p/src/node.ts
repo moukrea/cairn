@@ -652,19 +652,26 @@ export class Node {
     try {
       const { hmac } = await import('@noble/hashes/hmac');
       const { sha256 } = await import('@noble/hashes/sha256');
-      const key = hmac(sha256, new TextEncoder().encode('jaunt-pin-v1'), new TextEncoder().encode(pin));
+      const keyBytes = hmac(sha256, new TextEncoder().encode('jaunt-pin-v1'), new TextEncoder().encode(pin));
 
-      // Use contentRouting.findProviders() — this queries the Kademlia DHT
-      // for peers that registered as providers for this key.
+      // contentRouting.findProviders() expects a CID, not raw bytes.
+      // Create a CID from the HMAC hash using the identity multihash codec.
+      const { CID } = await import('multiformats/cid');
+      const { identity } = await import('multiformats/hashes/identity');
+      const { create: createDigest } = await import('multiformats/hashes/digest');
+
+      // Wrap as: identity multihash → raw codec (0x55) CID v1
+      const digest = createDigest(identity.code, keyBytes);
+      const cid = CID.createV1(0x55, digest);
+
       const contentRouting = (this._libp2pNode as any).contentRouting;
       if (!contentRouting?.findProviders) {
         console.warn('[cairn] No contentRouting.findProviders available');
         return null;
       }
 
-      console.log('[cairn] Querying DHT for PIN providers...');
-      // findProviders returns an async iterable of providers
-      for await (const provider of contentRouting.findProviders(key, { timeout: 15000 })) {
+      console.log('[cairn] Querying DHT for PIN providers (CID:', cid.toString(), ')...');
+      for await (const provider of contentRouting.findProviders(cid, { timeout: 15000 })) {
         const peerId = provider.id?.toString?.() || provider.toString?.();
         if (peerId) {
           console.log('[cairn] Found provider via PIN:', peerId);
