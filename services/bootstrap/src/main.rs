@@ -30,6 +30,10 @@ struct Args {
     #[arg(long, env = "CAIRN_BOOTSTRAP_DATA", default_value = ".cairn-bootstrap")]
     data_dir: String,
 
+    /// Additional bootstrap peers to connect to (multiaddr format)
+    #[arg(long, env = "CAIRN_BOOTSTRAP_PEERS", value_delimiter = ',')]
+    bootstrap_peers: Vec<String>,
+
     /// Log level (trace, debug, info, warn, error)
     #[arg(long, env = "RUST_LOG", default_value = "info")]
     log_level: String,
@@ -53,6 +57,10 @@ async fn main() {
     config.storage_backend = cairn_p2p::StorageBackend::Filesystem {
         path: std::path::PathBuf::from(&args.data_dir),
     };
+
+    if !args.bootstrap_peers.is_empty() {
+        config.bootstrap_nodes = args.bootstrap_peers;
+    }
 
     // Listen on explicit addresses for all three transports.
     config.listen_addresses = Some(vec![
