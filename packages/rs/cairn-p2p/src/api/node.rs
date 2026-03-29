@@ -204,21 +204,32 @@ impl ApiNode {
     ) -> Result<()> {
         let mut controller = build_swarm(&self.identity, &transport_config).await?;
 
-        // Listen on enabled transports with ephemeral ports.
-        if transport_config.tcp_enabled {
-            controller
-                .listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap())
-                .await?;
-        }
-        if transport_config.quic_enabled {
-            controller
-                .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap())
-                .await?;
-        }
-        if transport_config.websocket_enabled {
-            controller
-                .listen_on("/ip4/0.0.0.0/tcp/0/ws".parse().unwrap())
-                .await?;
+        // Listen on enabled transports.
+        if let Some(ref explicit_addrs) = self.config.listen_addresses {
+            // Caller specified explicit listen addresses — use those only.
+            for addr_str in explicit_addrs {
+                let addr: libp2p::Multiaddr = addr_str.parse().map_err(|e| {
+                    CairnError::Transport(format!("invalid listen address '{addr_str}': {e}"))
+                })?;
+                controller.listen_on(addr).await?;
+            }
+        } else {
+            // Default: listen on all interfaces with ephemeral ports.
+            if transport_config.tcp_enabled {
+                controller
+                    .listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap())
+                    .await?;
+            }
+            if transport_config.quic_enabled {
+                controller
+                    .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap())
+                    .await?;
+            }
+            if transport_config.websocket_enabled {
+                controller
+                    .listen_on("/ip4/0.0.0.0/tcp/0/ws".parse().unwrap())
+                    .await?;
+            }
         }
 
         // Collect initial listen addresses.
