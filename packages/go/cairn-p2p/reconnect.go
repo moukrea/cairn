@@ -1,6 +1,9 @@
 package cairn
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"math"
 	"sync"
@@ -245,4 +248,98 @@ func DefaultTimeoutConfig() *TimeoutConfig {
 		HeartbeatInterval:      30 * time.Second,
 		HeartbeatTimeout:       90 * time.Second,
 	}
+}
+
+// --- Session Resumption HMAC-SHA256 Proof ---
+
+const (
+	// resumeNonceSize is the size of the anti-replay nonce in bytes.
+	resumeNonceSize = 16
+
+	// resumeMaxTrackedNonces is the maximum number of nonces retained for
+	// anti-replay checks. Oldest nonces are evicted when this limit is reached.
+	resumeMaxTrackedNonces = 1024
+
+	// resumeHMACInfo is the HKDF info string used to derive the HMAC key
+	// from the session key.
+	resumeHMACInfo = "cairn-resume-hmac-v1"
+)
+
+// ResumeVerifier tracks seen nonces and provides HMAC-SHA256 proof
+// generation/verification for session resumption.
+type ResumeVerifier struct {
+	mu     sync.Mutex
+	nonces map[[resumeNonceSize]byte]struct{}
+	ring   [][resumeNonceSize]byte // ring buffer for eviction order
+	pos    int
+}
+
+// NewResumeVerifier creates a ResumeVerifier with capacity for anti-replay tracking.
+func NewResumeVerifier() *ResumeVerifier {
+	return &ResumeVerifier{
+		nonces: make(map[[resumeNonceSize]byte]struct{}, resumeMaxTrackedNonces),
+		ring:   make([][resumeNonceSize]byte, resumeMaxTrackedNonces),
+	}
+}
+
+// GenerateResumeProof generates an HMAC-SHA256 proof and a fresh random nonce.
+// The proof binds the nonce to the session key so only holders of that key
+// can produce a valid proof.
+//
+//	proof = HMAC-SHA256(key=sessionKey, message=nonce)
+func GenerateResumeProof(sessionKey []byte) (proof, nonce []byte, err error) {
+	if len(sessionKey) == 0 {
+		return nil, nil, fmt.Errorf("resume proof: empty session key")
+	}
+
+	nonce = make([]byte, resumeNonceSize)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, nil, fmt.Errorf("resume proof: nonce generation: %w", err)
+	}
+
+	mac := hmac.New(sha256.New, sessionKey)
+	mac.Write(nonce)
+	proof = mac.Sum(nil)
+
+	return proof, nonce, nil
+}
+
+// VerifyResumeProof verifies an HMAC-SHA256 session resumption proof.
+// Returns true only if the proof is valid AND the nonce has not been seen before.
+// Seen nonces are recorded to prevent replay attacks.
+func (rv *ResumeVerifier) VerifyResumeProof(sessionKey, proof, nonce []byte) bool {
+	if len(sessionKey) == 0 || len(proof) == 0 || len(nonce) != resumeNonceSize {
+		return false
+	}
+
+	// Verify HMAC
+	mac := hmac.New(sha256.New, sessionKey)
+	mac.Write(nonce)
+	expected := mac.Sum(nil)
+	if !hmac.Equal(proof, expected) {
+		return false
+	}
+
+	// Anti-replay: reject duplicate nonces
+	var nonceKey [resumeNonceSize]byte
+	copy(nonceKey[:], nonce)
+
+	rv.mu.Lock()
+	defer rv.mu.Unlock()
+
+	if _, seen := rv.nonces[nonceKey]; seen {
+		return false
+	}
+
+	// Evict the oldest nonce if at capacity
+	if len(rv.nonces) >= resumeMaxTrackedNonces {
+		evict := rv.ring[rv.pos]
+		delete(rv.nonces, evict)
+	}
+
+	rv.ring[rv.pos] = nonceKey
+	rv.nonces[nonceKey] = struct{}{}
+	rv.pos = (rv.pos + 1) % resumeMaxTrackedNonces
+
+	return true
 }

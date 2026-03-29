@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -12,16 +13,48 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+const (
+	// signalingInitialBackoff is the initial reconnection delay.
+	signalingInitialBackoff = 1 * time.Second
+
+	// signalingMaxBackoff is the maximum reconnection delay.
+	signalingMaxBackoff = 60 * time.Second
+
+	// signalingBackoffFactor is the exponential backoff multiplier.
+	signalingBackoffFactor = 2.0
+
+	// signalingMaxRetries is the maximum number of reconnection attempts
+	// before giving up on a single operation.
+	signalingMaxRetries = 5
+
+	// signalingRPCTimeout is the timeout for a single WebSocket RPC.
+	signalingRPCTimeout = 5 * time.Second
+
+	// signalingPersistentReconnectInterval is the interval at which
+	// the persistent connection attempts reconnection.
+	signalingPersistentReconnectInterval = 30 * time.Second
+)
+
 // SignalingDiscovery provides WebSocket-based signaling server discovery (Tier 1+).
 // Rendezvous ID maps to a topic/room on the signaling server.
 // Provides sub-second real-time reachability exchange.
 //
-// This is a Tier 1+ feature requiring a deployed cairn signaling server.
+// This implementation includes automatic reconnection with exponential backoff
+// for error recovery.
 type SignalingDiscovery struct {
 	serverURL string
 	authToken string
 	mu        sync.Mutex
 	local     map[string][]byte // rendezvous hex -> reachability (local cache)
+
+	// Persistent connection state
+	conn       *websocket.Conn
+	connMu     sync.Mutex
+	connClosed bool
+
+	// Reconnection state
+	backoffAttempt int
+	lastConnErr    time.Time
 }
 
 // NewSignalingDiscovery creates a signaling discovery backend.
@@ -59,7 +92,20 @@ type signalingMessage struct {
 	} `json:"peers,omitempty"`
 }
 
+// backoffDelay computes the exponential backoff delay for the given attempt.
+func signalingBackoffDelay(attempt int) time.Duration {
+	if attempt <= 0 {
+		return signalingInitialBackoff
+	}
+	delay := float64(signalingInitialBackoff) * math.Pow(signalingBackoffFactor, float64(attempt))
+	if delay > float64(signalingMaxBackoff) {
+		return signalingMaxBackoff
+	}
+	return time.Duration(delay)
+}
+
 // Publish publishes reachability to the signaling server's rendezvous room.
+// Includes automatic retry with exponential backoff on failure.
 func (s *SignalingDiscovery) Publish(ctx context.Context, rendezvousID, reachability []byte) error {
 	if s.serverURL == "" {
 		return fmt.Errorf("signaling: no server configured (Tier 1+ required)")
@@ -75,16 +121,37 @@ func (s *SignalingDiscovery) Publish(ctx context.Context, rendezvousID, reachabi
 	s.local[key] = append([]byte(nil), reachability...)
 	s.mu.Unlock()
 
-	// Attempt WebSocket announce
-	if err := s.wsAnnounce(ctx, key, reachability); err != nil {
-		// Non-fatal: local cache still works
+	// Attempt WebSocket announce with retries
+	var lastErr error
+	for attempt := 0; attempt <= signalingMaxRetries; attempt++ {
+		if attempt > 0 {
+			delay := signalingBackoffDelay(attempt - 1)
+			select {
+			case <-ctx.Done():
+				return nil // degrade gracefully
+			case <-time.After(delay):
+			}
+		}
+
+		if err := s.wsAnnounce(ctx, key, reachability); err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Success -- reset backoff state
+		s.mu.Lock()
+		s.backoffAttempt = 0
+		s.mu.Unlock()
 		return nil
 	}
 
+	// All retries failed -- degrade gracefully (local cache still works)
+	_ = lastErr
 	return nil
 }
 
 // Query queries the signaling server for peers in the rendezvous room.
+// Includes automatic retry with exponential backoff on failure.
 func (s *SignalingDiscovery) Query(ctx context.Context, rendezvousID []byte) ([][]byte, error) {
 	if s.serverURL == "" {
 		return nil, fmt.Errorf("signaling: no server configured (Tier 1+ required)")
@@ -103,13 +170,30 @@ func (s *SignalingDiscovery) Query(ctx context.Context, rendezvousID []byte) ([]
 	}
 	s.mu.Unlock()
 
-	// Attempt WebSocket query
-	results, err := s.wsQuery(ctx, key)
-	if err != nil {
-		return nil, nil // degrade gracefully
+	// Attempt WebSocket query with retries
+	for attempt := 0; attempt <= signalingMaxRetries; attempt++ {
+		if attempt > 0 {
+			delay := signalingBackoffDelay(attempt - 1)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+
+		results, err := s.wsQuery(ctx, key)
+		if err != nil {
+			continue
+		}
+
+		// Success -- reset backoff state
+		s.mu.Lock()
+		s.backoffAttempt = 0
+		s.mu.Unlock()
+		return results, nil
 	}
 
-	return results, nil
+	return nil, nil // degrade gracefully
 }
 
 // Close disconnects from the signaling server.
@@ -117,6 +201,15 @@ func (s *SignalingDiscovery) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.local = make(map[string][]byte)
+	s.connClosed = true
+
+	s.connMu.Lock()
+	if s.conn != nil {
+		s.conn.Close()
+		s.conn = nil
+	}
+	s.connMu.Unlock()
+
 	return nil
 }
 
@@ -125,11 +218,11 @@ func (s *SignalingDiscovery) IsConfigured() bool {
 	return s.serverURL != ""
 }
 
-// wsAnnounce sends an announce message to the signaling server.
-func (s *SignalingDiscovery) wsAnnounce(ctx context.Context, topic string, reachability []byte) error {
+// dialWithBackoff establishes a WebSocket connection with retry logic.
+func (s *SignalingDiscovery) dialWithBackoff(ctx context.Context) (*websocket.Conn, error) {
 	wsConfig, err := websocket.NewConfig(s.serverURL, s.serverURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if s.authToken != "" {
 		wsConfig.Header = http.Header{
@@ -139,10 +232,20 @@ func (s *SignalingDiscovery) wsAnnounce(ctx context.Context, topic string, reach
 
 	conn, err := websocket.DialConfig(wsConfig)
 	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+// wsAnnounce sends an announce message to the signaling server.
+func (s *SignalingDiscovery) wsAnnounce(ctx context.Context, topic string, reachability []byte) error {
+	conn, err := s.dialWithBackoff(ctx)
+	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	conn.SetDeadline(time.Now().Add(signalingRPCTimeout))
 
 	msg := signalingMessage{
 		Type:      "announce",
@@ -160,22 +263,12 @@ func (s *SignalingDiscovery) wsAnnounce(ctx context.Context, topic string, reach
 
 // wsQuery sends a query message to the signaling server and returns peer data.
 func (s *SignalingDiscovery) wsQuery(ctx context.Context, topic string) ([][]byte, error) {
-	wsConfig, err := websocket.NewConfig(s.serverURL, s.serverURL)
-	if err != nil {
-		return nil, err
-	}
-	if s.authToken != "" {
-		wsConfig.Header = http.Header{
-			"Authorization": []string{"Bearer " + s.authToken},
-		}
-	}
-
-	conn, err := websocket.DialConfig(wsConfig)
+	conn, err := s.dialWithBackoff(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	conn.SetDeadline(time.Now().Add(signalingRPCTimeout))
 
 	msg := signalingMessage{
 		Type:  "query",

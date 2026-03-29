@@ -354,9 +354,12 @@ func TestNoopNetworkMonitor(t *testing.T) {
 	assert.NoError(t, m.Stop())
 }
 
-func TestNewNetworkMonitorReturnsNoop(t *testing.T) {
+func TestNewNetworkMonitorReturnsImpl(t *testing.T) {
 	m := NewNetworkMonitor()
-	assert.IsType(t, &NoopNetworkMonitor{}, m)
+	// On Linux, returns NetlinkNetworkMonitor; on other platforms, NoopNetworkMonitor.
+	// Both implement NetworkMonitor.
+	var _ NetworkMonitor = m
+	assert.NotNil(t, m)
 }
 
 // --- TURN stub tests ---

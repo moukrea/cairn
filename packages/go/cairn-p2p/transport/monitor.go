@@ -44,10 +44,3 @@ func (n *NoopNetworkMonitor) Start(callback func(NetworkEvent)) error {
 func (n *NoopNetworkMonitor) Stop() error {
 	return nil
 }
-
-// NewNetworkMonitor returns the platform default NetworkMonitor.
-// Currently returns a no-op implementation; platform-specific implementations
-// will be added as needed (e.g., netlink on Linux, SCNetworkReachability on macOS/iOS).
-func NewNetworkMonitor() NetworkMonitor {
-	return &NoopNetworkMonitor{}
-}

@@ -41,6 +41,7 @@ type Encryptor struct {
 	Encrypt    func(plaintext []byte) (header []byte, ciphertext []byte, err error)
 	Decrypt    func(header []byte, ciphertext []byte) ([]byte, error)
 	CloseFunc  func()
+	ExportFunc func() ([]byte, error) // serializes ratchet state for persistence
 }
 
 // CustomMessageHandler is a callback for node-level custom message handling.
