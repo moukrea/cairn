@@ -5,3 +5,5 @@ parameters:
     level: 4
     paths:
         - src
+    scanFiles:
+        - phpstan-stubs/sodium-ed25519.php

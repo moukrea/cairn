@@ -308,8 +308,7 @@ fn compute_hmac(
 ) -> [u8; 32] {
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac =
-        HmacSha256::new_from_slice(key).expect("HMAC-SHA256 accepts any key size");
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC-SHA256 accepts any key size");
     mac.update(nonce);
     mac.update(&timestamp.to_be_bytes());
     mac.update(session_id);
@@ -357,9 +356,7 @@ pub fn encode_session_resume(
 /// Decode a SESSION_RESUME payload from CBOR bytes.
 ///
 /// Returns (session_id, proof, last_rx_sequence).
-pub fn decode_session_resume(
-    data: &[u8],
-) -> Result<([u8; 16], ResumeProof, u64)> {
+pub fn decode_session_resume(data: &[u8]) -> Result<([u8; 16], ResumeProof, u64)> {
     use ciborium::Value;
 
     let value: Value = ciborium::from_reader(data)
@@ -367,7 +364,11 @@ pub fn decode_session_resume(
 
     let map = match value {
         Value::Map(m) => m,
-        _ => return Err(CairnError::Protocol("SESSION_RESUME: expected CBOR map".into())),
+        _ => {
+            return Err(CairnError::Protocol(
+                "SESSION_RESUME: expected CBOR map".into(),
+            ))
+        }
     };
 
     let mut session_id_bytes: Option<[u8; 16]> = None;
@@ -427,14 +428,14 @@ pub fn decode_session_resume(
 
     let session_id = session_id_bytes
         .ok_or_else(|| CairnError::Protocol("SESSION_RESUME: missing session_id".into()))?;
-    let hmac = hmac_bytes
-        .ok_or_else(|| CairnError::Protocol("SESSION_RESUME: missing hmac".into()))?;
+    let hmac =
+        hmac_bytes.ok_or_else(|| CairnError::Protocol("SESSION_RESUME: missing hmac".into()))?;
     let last_rx_seq = last_rx
         .ok_or_else(|| CairnError::Protocol("SESSION_RESUME: missing last_rx_sequence".into()))?;
     let ts = timestamp
         .ok_or_else(|| CairnError::Protocol("SESSION_RESUME: missing timestamp".into()))?;
-    let nonce = nonce_bytes
-        .ok_or_else(|| CairnError::Protocol("SESSION_RESUME: missing nonce".into()))?;
+    let nonce =
+        nonce_bytes.ok_or_else(|| CairnError::Protocol("SESSION_RESUME: missing nonce".into()))?;
 
     Ok((
         session_id,
@@ -530,10 +531,7 @@ pub fn decode_session_expired(data: &[u8]) -> Result<ExpiredReason> {
             if key == 0 {
                 let code: i64 = val.try_into().unwrap_or(0);
                 return ExpiredReason::from_u8(code as u8).ok_or_else(|| {
-                    CairnError::Protocol(format!(
-                        "SESSION_EXPIRED: unknown reason code {}",
-                        code
-                    ))
+                    CairnError::Protocol(format!("SESSION_EXPIRED: unknown reason code {}", code))
                 });
             }
         }
@@ -1103,18 +1101,12 @@ mod tests {
         let bob_kp = X25519Keypair::generate();
         let bob_public = *bob_kp.public_key().as_bytes();
 
-        let alice1 = DoubleRatchet::init_initiator(
-            shared_secret,
-            bob_public,
-            RatchetConfig::default(),
-        )
-        .unwrap();
-        let alice2 = DoubleRatchet::init_initiator(
-            shared_secret,
-            bob_public,
-            RatchetConfig::default(),
-        )
-        .unwrap();
+        let alice1 =
+            DoubleRatchet::init_initiator(shared_secret, bob_public, RatchetConfig::default())
+                .unwrap();
+        let alice2 =
+            DoubleRatchet::init_initiator(shared_secret, bob_public, RatchetConfig::default())
+                .unwrap();
 
         // Same inputs should produce same resumption key
         // (but note: each init_initiator generates a fresh DH keypair, so
@@ -1139,12 +1131,9 @@ mod tests {
         let bob_kp = X25519Keypair::generate();
         let bob_public = *bob_kp.public_key().as_bytes();
 
-        let alice = DoubleRatchet::init_initiator(
-            shared_secret,
-            bob_public,
-            RatchetConfig::default(),
-        )
-        .unwrap();
+        let alice =
+            DoubleRatchet::init_initiator(shared_secret, bob_public, RatchetConfig::default())
+                .unwrap();
 
         let key_before = alice.derive_resumption_key().unwrap();
 
@@ -1168,18 +1157,11 @@ mod tests {
         let bob_kp = X25519Keypair::generate();
         let bob_public = *bob_kp.public_key().as_bytes();
 
-        let alice = DoubleRatchet::init_initiator(
-            shared_secret,
-            bob_public,
-            RatchetConfig::default(),
-        )
-        .unwrap();
-        let bob = DoubleRatchet::init_responder(
-            shared_secret,
-            bob_kp,
-            RatchetConfig::default(),
-        )
-        .unwrap();
+        let alice =
+            DoubleRatchet::init_initiator(shared_secret, bob_public, RatchetConfig::default())
+                .unwrap();
+        let bob =
+            DoubleRatchet::init_responder(shared_secret, bob_kp, RatchetConfig::default()).unwrap();
 
         // Both sides should derive different resumption keys at this point
         // because Alice has done a DH step and Bob hasn't yet.

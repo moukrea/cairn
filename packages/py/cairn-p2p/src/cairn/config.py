@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cairn.crypto.storage import KeyStorage
 
 # ---------------------------------------------------------------------------
 # Default STUN servers
@@ -54,6 +58,15 @@ class MeshSettings:
     relay_capacity: int = 10
 
 
+@dataclass
+class PinFormat:
+    """PIN code format configuration."""
+
+    length: int = 8
+    group_size: int = 4
+    separator: str = "-"
+
+
 # ---------------------------------------------------------------------------
 # CairnConfig
 # ---------------------------------------------------------------------------
@@ -84,6 +97,12 @@ class CairnConfig:
         default_factory=MeshSettings
     )
     server_mode: bool = False
+    app_identifier: str | None = None
+    pin_format: "PinFormat" = field(default_factory=lambda: PinFormat())
+    auto_approve_pairing: bool = False
+    pairing_password: str | None = None
+    pairing_message: str | None = None
+    key_storage: "KeyStorage | None" = None
 
     # --- Tier presets ---
 

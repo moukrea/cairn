@@ -111,6 +111,26 @@ export interface CairnConfig {
   reconnectionPolicy?: Partial<ReconnectionPolicy>;
   meshSettings?: MeshSettings;
   storageBackend?: StorageBackend;
+  /** Optional app identifier for discovery namespace isolation. */
+  appIdentifier?: string;
+  /** Customizable PIN format for pairing codes. */
+  pinFormat?: PinFormat;
+  /** Auto-approve all valid pairing requests (kiosk/open mode). */
+  autoApprovePairing?: boolean;
+  /** Optional second-layer password for pairing authentication. */
+  pairingPassword?: string;
+  /** Optional human-readable message attached to pairing requests. */
+  pairingMessage?: string;
+}
+
+/** PIN format configuration. */
+export interface PinFormat {
+  /** Number of Crockford Base32 characters. Default: 8. */
+  length?: number;
+  /** Characters per group. Default: 4. */
+  groupSize?: number;
+  /** Separator between groups. Default: "-". */
+  separator?: string;
 }
 
 /**

@@ -51,6 +51,11 @@ parameters:
 			path: src/Crypto/Spake2.php
 
 		-
+			message: "#^Property Cairn\\\\Crypto\\\\Spake2\\:\\:\\$passwordScalar \\(string\\) does not accept null\\.$#"
+			count: 1
+			path: src/Crypto/Spake2.php
+
+		-
 			message: "#^Property Cairn\\\\Crypto\\\\Spake2\\:\\:\\$scalar \\(string\\) does not accept null\\.$#"
 			count: 1
 			path: src/Crypto/Spake2.php
@@ -94,3 +99,38 @@ parameters:
 			message: "#^Method Cairn\\\\Transport\\\\TcpTransport\\:\\:close\\(\\) should return React\\\\Promise\\\\PromiseInterface\\<void\\> but returns React\\\\Promise\\\\PromiseInterface\\<null\\>\\.$#"
 			count: 1
 			path: src/Transport/Tcp.php
+
+		-
+			message: "#^Comparison operation \"\\>\\=\" between int\\<3, max\\> and 3 is always true\\.$#"
+			count: 1
+			path: src/Discovery/Dht.php
+
+		-
+			message: "#^Offset 'action' does not exist on array\\{1\\: int\\}\\.$#"
+			count: 1
+			path: src/Discovery/Tracker.php
+
+		-
+			message: "#^Offset 'action' does not exist on array\\{1\\: int, 2\\: int\\}\\.$#"
+			count: 1
+			path: src/Discovery/Tracker.php
+
+		-
+			message: "#^Offset 'connection_id' does not exist on array\\{1\\: int\\}\\.$#"
+			count: 1
+			path: src/Discovery/Tracker.php
+
+		-
+			message: "#^Method Cairn\\\\Transport\\\\WebSocketTransport\\:\\:close\\(\\) should return React\\\\Promise\\\\PromiseInterface\\<void\\> but returns React\\\\Promise\\\\PromiseInterface\\<null\\>\\.$#"
+			count: 1
+			path: src/Transport/WebSocket.php
+
+		-
+			message: "#^Method Cairn\\\\Transport\\\\WebSocketConnection\\:\\:send\\(\\) should return React\\\\Promise\\\\PromiseInterface\\<void\\> but returns React\\\\Promise\\\\PromiseInterface\\<null\\>\\.$#"
+			count: 1
+			path: src/Transport/WebSocket.php
+
+		-
+			message: "#^Method Cairn\\\\Transport\\\\WebSocketConnection\\:\\:close\\(\\) should return React\\\\Promise\\\\PromiseInterface\\<void\\> but returns React\\\\Promise\\\\PromiseInterface\\<null\\>\\.$#"
+			count: 1
+			path: src/Transport/WebSocket.php

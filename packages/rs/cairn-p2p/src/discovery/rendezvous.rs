@@ -46,14 +46,39 @@ impl Default for RotationConfig {
 
 /// Derive a rendezvous ID from a pairing secret and epoch number.
 ///
-/// Uses HKDF-SHA256 with info string `"cairn-rendezvous-v1"`. The epoch
-/// number is encoded as big-endian u64 and used as the HKDF salt, so each
-/// epoch produces a different rendezvous ID from the same pairing secret.
+/// Uses HKDF-SHA256 with info string `"cairn-rendezvous-v1"` (or
+/// `"cairn-rendezvous-v1:{app_id}"` when an app identifier is set).
+/// The epoch number is encoded as big-endian u64 and used as the HKDF salt.
 pub fn derive_rendezvous_id(pairing_secret: &[u8], epoch: u64) -> Result<RendezvousId> {
+    derive_rendezvous_id_with_app(pairing_secret, epoch, None)
+}
+
+/// Derive a rendezvous ID with an optional app identifier for namespace isolation.
+pub fn derive_rendezvous_id_with_app(
+    pairing_secret: &[u8],
+    epoch: u64,
+    app_identifier: Option<&str>,
+) -> Result<RendezvousId> {
     let salt = epoch.to_be_bytes();
+    let info = build_info(HKDF_INFO_RENDEZVOUS, app_identifier);
     let mut id = [0u8; 32];
-    hkdf_sha256(pairing_secret, Some(&salt), HKDF_INFO_RENDEZVOUS, &mut id)?;
+    hkdf_sha256(pairing_secret, Some(&salt), &info, &mut id)?;
     Ok(RendezvousId(id))
+}
+
+/// Build an HKDF info string, optionally appending an app identifier.
+/// Format: "base-info" or "base-info:{app_id}"
+fn build_info(base: &[u8], app_identifier: Option<&str>) -> Vec<u8> {
+    match app_identifier {
+        Some(id) if !id.is_empty() => {
+            let mut info = Vec::with_capacity(base.len() + 1 + id.len());
+            info.extend_from_slice(base);
+            info.push(b':');
+            info.extend_from_slice(id.as_bytes());
+            info
+        }
+        _ => base.to_vec(),
+    }
 }
 
 /// Derive a pairing-bootstrapped rendezvous ID from PAKE credentials and a nonce.

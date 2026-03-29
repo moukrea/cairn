@@ -222,6 +222,9 @@ final class NodeTest extends TestCase
 
     public function testPairScanQrRoundtrip(): void
     {
+        if (!function_exists('sodium_crypto_core_ed25519_scalar_random')) {
+            $this->markTestSkipped('Ed25519 sodium functions not available');
+        }
         $node = Node::create();
         $result = $node->pairGenerateQr();
 
@@ -248,6 +251,9 @@ final class NodeTest extends TestCase
 
     public function testPairEnterPinReturnspeerId(): void
     {
+        if (!function_exists('sodium_crypto_core_ed25519_scalar_random')) {
+            $this->markTestSkipped('Ed25519 sodium functions not available');
+        }
         $node = Node::create();
 
         $emittedPeerId = null;
@@ -262,6 +268,9 @@ final class NodeTest extends TestCase
 
     public function testPairEnterPinRejectsInvalid(): void
     {
+        if (!function_exists('sodium_crypto_core_ed25519_scalar_random')) {
+            $this->markTestSkipped('Ed25519 sodium functions not available');
+        }
         $node = Node::create();
         $this->expectException(CairnException::class);
         $node->pairEnterPin('!!!');
@@ -279,6 +288,9 @@ final class NodeTest extends TestCase
 
     public function testPairFromLinkRoundtrip(): void
     {
+        if (!function_exists('sodium_crypto_core_ed25519_scalar_random')) {
+            $this->markTestSkipped('Ed25519 sodium functions not available');
+        }
         $node = Node::create();
         $result = $node->pairGenerateLink();
 

@@ -323,9 +323,9 @@ func TestAllNatTypes(t *testing.T) {
 	assert.Contains(t, types, NatUnknown)
 }
 
-func TestDetectNATTypeReturnsUnknown(t *testing.T) {
+func TestDetectNATTypeReturnsValidType(t *testing.T) {
 	result := DetectNATType(context.Background(), DefaultStunServers)
-	assert.Equal(t, NatUnknown, result)
+	assert.Contains(t, AllNatTypes(), result)
 }
 
 func TestDetectNATTypeEmptyServersReturnsUnknown(t *testing.T) {
@@ -337,7 +337,7 @@ func TestNatDetectorWithDefaults(t *testing.T) {
 	d := NewNatDetector(nil)
 	assert.Equal(t, DefaultStunServers, d.StunServers())
 	result := d.Detect(context.Background())
-	assert.Equal(t, NatUnknown, result)
+	assert.Contains(t, AllNatTypes(), result)
 }
 
 func TestNatDetectorCustomServers(t *testing.T) {
@@ -354,9 +354,12 @@ func TestNoopNetworkMonitor(t *testing.T) {
 	assert.NoError(t, m.Stop())
 }
 
-func TestNewNetworkMonitorReturnsNoop(t *testing.T) {
+func TestNewNetworkMonitorReturnsImpl(t *testing.T) {
 	m := NewNetworkMonitor()
-	assert.IsType(t, &NoopNetworkMonitor{}, m)
+	// On Linux, returns NetlinkNetworkMonitor; on other platforms, NoopNetworkMonitor.
+	// Both implement NetworkMonitor.
+	var _ NetworkMonitor = m
+	assert.NotNil(t, m)
 }
 
 // --- TURN stub tests ---

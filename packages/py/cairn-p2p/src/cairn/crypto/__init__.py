@@ -42,6 +42,7 @@ from cairn.crypto.storage import (
     FilesystemKeyStorage,
     InMemoryKeyStorage,
     KeyStorage,
+    get_default_storage,
 )
 
 __all__ = [
@@ -69,6 +70,7 @@ __all__ = [
     "FilesystemKeyStorage",
     "InMemoryKeyStorage",
     "KeyStorage",
+    "get_default_storage",
     "aead_decrypt",
     "aead_encrypt",
     "derive_emoji_sas",

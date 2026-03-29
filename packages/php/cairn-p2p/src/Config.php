@@ -66,6 +66,22 @@ final class MeshSettings
 }
 
 /**
+ * PIN format configuration.
+ */
+final class PinFormatConfig
+{
+    public function __construct(
+        /** Number of Crockford Base32 characters. Default: 8. */
+        public readonly int $length = 8,
+        /** Characters per group. Default: 4. */
+        public readonly int $groupSize = 4,
+        /** Separator between groups. Default: "-". */
+        public readonly string $separator = '-',
+    ) {
+    }
+}
+
+/**
  * Top-level configuration object passed at initialization (spec section 1.1).
  *
  * Every field has a sensible default, enabling zero-config usage (Tier 0).
@@ -103,6 +119,16 @@ final class CairnConfig
         public readonly StorageBackendType $storageBackend = StorageBackendType::Filesystem,
         public readonly string $storagePath = '.cairn',
         public readonly bool $serverMode = false,
+        /** Optional app identifier for discovery namespace isolation. */
+        public readonly ?string $appIdentifier = null,
+        /** PIN format configuration. */
+        public readonly PinFormatConfig $pinFormat = new PinFormatConfig(),
+        /** Auto-approve all valid pairing requests (kiosk/open mode). */
+        public readonly bool $autoApprovePairing = false,
+        /** Optional second-layer password for pairing authentication. */
+        public readonly ?string $pairingPassword = null,
+        /** Optional human-readable message attached to pairing requests. */
+        public readonly ?string $pairingMessage = null,
     ) {
     }
 

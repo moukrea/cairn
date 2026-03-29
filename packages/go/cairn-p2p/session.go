@@ -3,6 +3,7 @@ package cairn
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -482,6 +483,118 @@ func (s *Session) DrainMessageQueue() [][]byte {
 	queued := s.messageQueue
 	s.messageQueue = nil
 	return queued
+}
+
+// PersistState serializes the session state for storage via a StorageBackend.
+// This captures the session metadata and, if an encryptor with an ExportFunc
+// is set, the Double Ratchet state, enabling session resumption after restart.
+func (s *Session) PersistState() (SessionState, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	sp := sessionPersisted{
+		SessionID:  s.sessionID,
+		PeerID:     s.peerID,
+		State:      int(s.state),
+		CreatedAt:  s.createdAt.UnixNano(),
+		ExpiresAt:  s.expiresAt.UnixNano(),
+		SeqCounter: s.sequenceCounter.Load(),
+	}
+
+	// Export encryptor state if available
+	if s.encryptor != nil && s.encryptor.ExportFunc != nil {
+		ratchetData, err := s.encryptor.ExportFunc()
+		if err != nil {
+			return SessionState{}, fmt.Errorf("session persist: export ratchet: %w", err)
+		}
+		sp.RatchetState = ratchetData
+	}
+
+	// Collect open channel names
+	for name, ch := range s.channels {
+		if ch.IsOpen() {
+			sp.Channels = append(sp.Channels, name)
+		}
+	}
+
+	data, err := cborMarshal(sp)
+	if err != nil {
+		return SessionState{}, fmt.Errorf("session persist: marshal: %w", err)
+	}
+	return SessionState{Data: data}, nil
+}
+
+// RestoreState restores session metadata from a persisted SessionState.
+// The caller must separately restore the encryptor (Double Ratchet) using
+// the RatchetState bytes from the persisted data and set it via SetEncryptor.
+// Returns the raw ratchet state bytes for the caller to reconstruct the
+// encryptor outside the session package.
+func RestoreSession(state SessionState, events chan<- Event) (*Session, []byte, error) {
+	var sp sessionPersisted
+	if err := cborUnmarshal(state.Data, &sp); err != nil {
+		return nil, nil, fmt.Errorf("session restore: unmarshal: %w", err)
+	}
+
+	s := &Session{
+		sessionID:      sp.SessionID,
+		peerID:         sp.PeerID,
+		state:          ConnectionState(sp.State),
+		createdAt:      time.Unix(0, sp.CreatedAt),
+		expiresAt:      time.Unix(0, sp.ExpiresAt),
+		channels:       make(map[string]*Channel),
+		customHandlers: make(map[uint16]func([]byte)),
+		events:         events,
+	}
+	s.sequenceCounter.Store(sp.SeqCounter)
+
+	// Re-create channels
+	for _, name := range sp.Channels {
+		s.channels[name] = NewChannel(name)
+	}
+
+	return s, sp.RatchetState, nil
+}
+
+// sessionPersisted is the serializable form of a session.
+type sessionPersisted struct {
+	SessionID    [16]byte `json:"session_id"`
+	PeerID       PeerID   `json:"peer_id"`
+	State        int      `json:"state"`
+	CreatedAt    int64    `json:"created_at"`
+	ExpiresAt    int64    `json:"expires_at"`
+	SeqCounter   uint64   `json:"seq_counter"`
+	RatchetState []byte   `json:"ratchet_state,omitempty"`
+	Channels     []string `json:"channels,omitempty"`
+}
+
+// cborMarshal is a simple JSON-based serialization (matching our envelope format).
+// Using JSON for session persistence since CBOR is used for wire protocol.
+func cborMarshal(v interface{}) ([]byte, error) {
+	return json.Marshal(v)
+}
+
+// cborUnmarshal deserializes from JSON.
+func cborUnmarshal(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
+}
+
+// PersistToStore saves the session state to the given StorageBackend.
+func (s *Session) PersistToStore(store StorageBackend) error {
+	state, err := s.PersistState()
+	if err != nil {
+		return err
+	}
+	return store.StoreSession(fmt.Sprintf("%x", s.sessionID), state)
+}
+
+// RestoreSessionFromStore loads a session from the given StorageBackend.
+// Returns the session and the raw ratchet state bytes for encryptor reconstruction.
+func RestoreSessionFromStore(store StorageBackend, sessionID string, events chan<- Event) (*Session, []byte, error) {
+	state, err := store.LoadSession(sessionID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("session restore from store: %w", err)
+	}
+	return RestoreSession(state, events)
 }
 
 // Close closes the session and all its channels.

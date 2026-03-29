@@ -18,6 +18,13 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(PairingSession::class)]
 final class StateMachineTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (!function_exists('sodium_crypto_core_ed25519_scalar_random')) {
+            $this->markTestSkipped('Ed25519 sodium functions not available');
+        }
+    }
+
     private function makePeerId(): PeerId
     {
         $identity = Identity::generate();

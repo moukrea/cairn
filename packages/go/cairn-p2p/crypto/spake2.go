@@ -7,79 +7,63 @@ import (
 	"io"
 
 	"filippo.io/edwards25519"
+	"golang.org/x/crypto/hkdf"
 )
 
 // SPAKE2 implements the balanced PAKE protocol using Ed25519 point arithmetic.
-// Compatible with the RustCrypto SPAKE2 implementation.
+// Wire-compatible with the RustCrypto spake2 crate v0.4 using Ed25519Group.
 //
 // Protocol flow:
 //   1. Both sides call NewSpake2() which returns (state, outbound_message)
+//      outbound message is 33 bytes: 1-byte side prefix + 32-byte point
 //   2. Both sides exchange messages
 //   3. Both sides call Finish(inbound_message) to get the shared secret
 
 // Spake2 holds state for one side of a SPAKE2 exchange.
 type Spake2 struct {
-	role     Role
-	password []byte
-	scalar   *edwards25519.Scalar
-	myPub    []byte // the blinded public value we sent
+	role           Role
+	password       []byte
+	scalar         *edwards25519.Scalar
+	passwordScalar *edwards25519.Scalar
+	myMsg          []byte // 32-byte compressed point (without side prefix)
 }
 
-// M and N are hash-to-curve derived generator points for SPAKE2.
-// These are derived deterministically from fixed strings to avoid trusted setup.
+// M and N are the standard SPAKE2 generator points for Ed25519Group,
+// matching the RustCrypto spake2 crate and Python spake2 library.
 var (
 	spake2M *edwards25519.Point
 	spake2N *edwards25519.Point
 )
 
 func init() {
-	spake2M = hashToEdwardsPoint([]byte("cairn-spake2-M-v1"))
-	spake2N = hashToEdwardsPoint([]byte("cairn-spake2-N-v1"))
-}
+	var err error
+	// M: 15cfd18e385952982b6a8f8c7854963b58e34388c8e6dae891db756481a02312
+	spake2M, err = new(edwards25519.Point).SetBytes([]byte{
+		0x15, 0xcf, 0xd1, 0x8e, 0x38, 0x59, 0x52, 0x98,
+		0x2b, 0x6a, 0x8f, 0x8c, 0x78, 0x54, 0x96, 0x3b,
+		0x58, 0xe3, 0x43, 0x88, 0xc8, 0xe6, 0xda, 0xe8,
+		0x91, 0xdb, 0x75, 0x64, 0x81, 0xa0, 0x23, 0x12,
+	})
+	if err != nil {
+		panic("failed to decode SPAKE2 M point: " + err.Error())
+	}
 
-// hashToEdwardsPoint derives a deterministic Edwards25519 point from arbitrary data.
-// Uses iterated hashing until a valid point is found.
-func hashToEdwardsPoint(data []byte) *edwards25519.Point {
-	// Hash and try until we get a valid point
-	counter := byte(0)
-	for {
-		h := sha256.New()
-		h.Write(data)
-		h.Write([]byte{counter})
-		hash := h.Sum(nil)
-
-		// Try to decode as a compressed Edwards point
-		// Set high bit to 0 for y-coordinate sign
-		hash[31] &= 0x7F
-
-		p, err := new(edwards25519.Point).SetBytes(hash)
-		if err == nil {
-			// Multiply by cofactor (8) to ensure we're in the prime-order subgroup
-			eight := scalarFromInt(8)
-			return new(edwards25519.Point).ScalarMult(eight, p)
-		}
-		counter++
-		if counter == 0 {
-			// Exhausted all 256 attempts (extremely unlikely)
-			panic("failed to derive Edwards25519 point")
-		}
+	// N: f04f2e7eb734b2a8f8b472eaf9c3c632576ac64aea650b496a8a20ff00e583c3
+	spake2N, err = new(edwards25519.Point).SetBytes([]byte{
+		0xf0, 0x4f, 0x2e, 0x7e, 0xb7, 0x34, 0xb2, 0xa8,
+		0xf8, 0xb4, 0x72, 0xea, 0xf9, 0xc3, 0xc6, 0x32,
+		0x57, 0x6a, 0xc6, 0x4a, 0xea, 0x65, 0x0b, 0x49,
+		0x6a, 0x8a, 0x20, 0xff, 0x00, 0xe5, 0x83, 0xc3,
+	})
+	if err != nil {
+		panic("failed to decode SPAKE2 N point: " + err.Error())
 	}
 }
 
-func scalarFromInt(n uint64) *edwards25519.Scalar {
-	var buf [32]byte
-	buf[0] = byte(n)
-	buf[1] = byte(n >> 8)
-	buf[2] = byte(n >> 16)
-	buf[3] = byte(n >> 24)
-	s, _ := new(edwards25519.Scalar).SetCanonicalBytes(buf[:])
-	return s
-}
-
 // NewSpake2 initiates a SPAKE2 exchange.
-// Returns the SPAKE2 state and the outbound message to send to the peer.
+// Returns the SPAKE2 state and the 33-byte outbound message (side prefix + point).
 func NewSpake2(role Role, password []byte) (*Spake2, []byte, error) {
-	// Generate random scalar
+	// Generate random scalar (64 uniform bytes reduced mod L)
 	var scalarBytes [64]byte
 	if _, err := io.ReadFull(rand.Reader, scalarBytes[:]); err != nil {
 		return nil, nil, fmt.Errorf("SPAKE2 random scalar generation failed: %w", err)
@@ -89,12 +73,9 @@ func NewSpake2(role Role, password []byte) (*Spake2, []byte, error) {
 		return nil, nil, fmt.Errorf("SPAKE2 scalar creation failed: %w", err)
 	}
 
-	// Compute password scalar: hash password to get a scalar
 	pwScalar := passwordToScalar(password)
 
-	// Compute blinded public value:
-	// Initiator (A): T = scalar*G + pwScalar*M
-	// Responder (B): T = scalar*G + pwScalar*N
+	// T = scalar*G + pwScalar*(M or N)
 	basePoint := new(edwards25519.Point).ScalarBaseMult(scalar)
 
 	var blindingPoint *edwards25519.Point
@@ -105,73 +86,110 @@ func NewSpake2(role Role, password []byte) (*Spake2, []byte, error) {
 	}
 
 	pubPoint := new(edwards25519.Point).Add(basePoint, blindingPoint)
-	pubBytes := pubPoint.Bytes()
+	pubBytes := pubPoint.Bytes() // 32 bytes
+
+	// Prepend side byte: 0x41 ('A') for initiator, 0x42 ('B') for responder
+	var sideByte byte
+	if role == RoleInitiator {
+		sideByte = 0x41
+	} else {
+		sideByte = 0x42
+	}
+	outbound := make([]byte, 33)
+	outbound[0] = sideByte
+	copy(outbound[1:], pubBytes)
 
 	s := &Spake2{
-		role:     role,
-		password: password,
-		scalar:   scalar,
-		myPub:    pubBytes,
+		role:           role,
+		password:       append([]byte(nil), password...),
+		scalar:         scalar,
+		passwordScalar: pwScalar,
+		myMsg:          pubBytes,
 	}
 
-	return s, pubBytes, nil
+	return s, outbound, nil
 }
 
-// Finish completes the SPAKE2 exchange given the peer's message.
+// Finish completes the SPAKE2 exchange given the peer's 33-byte message.
 // Returns the shared secret (32 bytes).
 func (s *Spake2) Finish(inboundMessage []byte) ([32]byte, error) {
-	// Decode peer's public value
-	peerPoint, err := new(edwards25519.Point).SetBytes(inboundMessage)
+	if len(inboundMessage) != 33 {
+		return [32]byte{}, fmt.Errorf("SPAKE2 invalid peer message length: expected 33, got %d", len(inboundMessage))
+	}
+
+	// Validate side byte
+	peerSide := inboundMessage[0]
+	if s.role == RoleInitiator && peerSide != 0x42 {
+		return [32]byte{}, fmt.Errorf("SPAKE2 bad side byte: expected 0x42, got 0x%02x", peerSide)
+	}
+	if s.role == RoleResponder && peerSide != 0x41 {
+		return [32]byte{}, fmt.Errorf("SPAKE2 bad side byte: expected 0x41, got 0x%02x", peerSide)
+	}
+
+	peerPoint, err := new(edwards25519.Point).SetBytes(inboundMessage[1:])
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("SPAKE2 invalid peer message: %w", err)
 	}
 
-	// Compute password scalar
-	pwScalar := passwordToScalar(s.password)
-
-	// Remove blinding:
-	// If we're A (initiator), peer sent T_B = scalar_B*G + pwScalar*N
-	//   so unblinded = T_B - pwScalar*N
-	// If we're B (responder), peer sent T_A = scalar_A*G + pwScalar*M
-	//   so unblinded = T_A - pwScalar*M
+	// Remove blinding: unblinded = peer_T - pwScalar * (N or M)
 	var blindingPoint *edwards25519.Point
 	if s.role == RoleInitiator {
-		blindingPoint = new(edwards25519.Point).ScalarMult(pwScalar, spake2N)
+		blindingPoint = new(edwards25519.Point).ScalarMult(s.passwordScalar, spake2N)
 	} else {
-		blindingPoint = new(edwards25519.Point).ScalarMult(pwScalar, spake2M)
+		blindingPoint = new(edwards25519.Point).ScalarMult(s.passwordScalar, spake2M)
 	}
 
 	negBlinding := new(edwards25519.Point).Negate(blindingPoint)
 	unblinded := new(edwards25519.Point).Add(peerPoint, negBlinding)
 
-	// Compute shared secret: scalar * unblinded
+	// K = scalar * unblinded
 	sharedPoint := new(edwards25519.Point).ScalarMult(s.scalar, unblinded)
+	kBytes := sharedPoint.Bytes()
 
-	// Derive the key from transcript: H(password || myPub || peerPub || sharedPoint)
-	h := sha256.New()
-	h.Write(s.password)
+	// Transcript hash matching RustCrypto spake2:
+	// SHA256(SHA256(pw) || SHA256(idA) || SHA256(idB) || X_msg || Y_msg || K_bytes)
+	var transcript [192]byte
+
+	pwHash := sha256.Sum256(s.password)
+	copy(transcript[0:32], pwHash[:])
+
+	idAHash := sha256.Sum256([]byte("cairn-initiator"))
+	copy(transcript[32:64], idAHash[:])
+
+	idBHash := sha256.Sum256([]byte("cairn-responder"))
+	copy(transcript[64:96], idBHash[:])
+
+	peerMsg := inboundMessage[1:]
 	if s.role == RoleInitiator {
-		h.Write(s.myPub)
-		h.Write(inboundMessage)
+		copy(transcript[96:128], s.myMsg)
+		copy(transcript[128:160], peerMsg)
 	} else {
-		h.Write(inboundMessage)
-		h.Write(s.myPub)
+		copy(transcript[96:128], peerMsg)
+		copy(transcript[128:160], s.myMsg)
 	}
-	h.Write(sharedPoint.Bytes())
+	copy(transcript[160:192], kBytes)
 
-	var result [32]byte
-	copy(result[:], h.Sum(nil))
+	result := sha256.Sum256(transcript[:])
 	return result, nil
 }
 
-// passwordToScalar hashes the password to an Edwards25519 scalar.
+// passwordToScalar derives an Ed25519 scalar from a password using HKDF-SHA256,
+// matching the RustCrypto spake2 crate's hash_to_scalar.
 func passwordToScalar(password []byte) *edwards25519.Scalar {
-	// Hash to 64 bytes for uniform distribution
-	h1 := sha256.Sum256(append([]byte("cairn-spake2-pw-v1"), password...))
-	h2 := sha256.Sum256(append([]byte("cairn-spake2-pw-v1-ext"), password...))
-	var uniform [64]byte
-	copy(uniform[:32], h1[:])
-	copy(uniform[32:], h2[:])
-	s, _ := new(edwards25519.Scalar).SetUniformBytes(uniform[:])
+	// HKDF: salt=empty, ikm=password, info="SPAKE2 pw", len=48
+	h := hkdf.New(sha256.New, password, []byte{}, []byte("SPAKE2 pw"))
+	okm := make([]byte, 48)
+	if _, err := io.ReadFull(h, okm); err != nil {
+		panic("HKDF expand failed: " + err.Error())
+	}
+
+	// Reverse 48-byte big-endian HKDF output into 64-byte little-endian buffer,
+	// then reduce mod L (matching Rust's from_bytes_mod_order_wide)
+	var reducible [64]byte
+	for i := 0; i < 48; i++ {
+		reducible[47-i] = okm[i]
+	}
+
+	s, _ := new(edwards25519.Scalar).SetUniformBytes(reducible[:])
 	return s
 }

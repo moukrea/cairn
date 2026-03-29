@@ -2,11 +2,15 @@
 
 Provides ``KeyStorage`` ABC, ``InMemoryKeyStorage`` (for testing), and
 ``FilesystemKeyStorage`` (AES-256-GCM encrypted, PBKDF2-derived key).
+
+Use ``get_default_storage()`` to obtain a ``FilesystemKeyStorage`` instance
+with sensible defaults (XDG data directory, auto-generated passphrase).
 """
 
 from __future__ import annotations
 
 import os
+import secrets
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -204,3 +208,81 @@ class FilesystemKeyStorage(KeyStorage):
             iterations=PBKDF2_ITERATIONS,
         )
         return kdf.derive(passphrase.encode())
+
+
+# ---------------------------------------------------------------------------
+# Default storage factory
+# ---------------------------------------------------------------------------
+
+# Default data directory follows XDG conventions on Linux/macOS.
+_DEFAULT_DIR_NAME = "cairn"
+_PASSPHRASE_FILE = ".cairn_passphrase"
+
+
+def _default_data_dir() -> Path:
+    """Return the platform-appropriate default data directory for cairn keys.
+
+    Uses ``$CAIRN_DATA_DIR`` if set, otherwise ``$XDG_DATA_HOME/cairn``
+    (defaults to ``~/.local/share/cairn`` on Linux,
+    ``~/Library/Application Support/cairn`` on macOS,
+    ``%APPDATA%/cairn`` on Windows).
+    """
+    env_dir = os.environ.get("CAIRN_DATA_DIR")
+    if env_dir:
+        return Path(env_dir) / "keys"
+
+    if os.name == "nt":
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    elif os.uname().sysname == "Darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        xdg = os.environ.get("XDG_DATA_HOME")
+        base = Path(xdg) if xdg else Path.home() / ".local" / "share"
+
+    return base / _DEFAULT_DIR_NAME / "keys"
+
+
+def _get_or_create_passphrase(data_dir: Path) -> str:
+    """Load or generate a random passphrase persisted alongside the key store.
+
+    The passphrase file is stored one level above the keys directory so it
+    is not confused with a key file.  On first run a 32-byte random hex
+    token is generated and written atomically.
+    """
+    passphrase_path = data_dir.parent / _PASSPHRASE_FILE
+    if passphrase_path.exists():
+        return passphrase_path.read_text().strip()
+
+    passphrase_path.parent.mkdir(parents=True, exist_ok=True)
+    passphrase = secrets.token_hex(32)
+    tmp = passphrase_path.with_suffix(".tmp")
+    tmp.write_text(passphrase)
+    tmp.rename(passphrase_path)
+    # Best effort: restrict permissions on Unix
+    try:
+        passphrase_path.chmod(0o600)
+    except OSError:
+        pass
+    return passphrase
+
+
+def get_default_storage(
+    base_dir: str | Path | None = None,
+    passphrase: str | None = None,
+) -> FilesystemKeyStorage:
+    """Return a ``FilesystemKeyStorage`` with sensible defaults.
+
+    Parameters
+    ----------
+    base_dir:
+        Directory for key files.  Defaults to a platform-appropriate
+        location (see ``_default_data_dir``).
+    passphrase:
+        Encryption passphrase.  If ``None``, a random passphrase is
+        generated and persisted next to the data directory so it
+        survives process restarts.
+    """
+    data_dir = Path(base_dir) if base_dir else _default_data_dir()
+    if passphrase is None:
+        passphrase = _get_or_create_passphrase(data_dir)
+    return FilesystemKeyStorage(data_dir, passphrase)

@@ -25,6 +25,7 @@ mod management;
 use std::sync::Arc;
 
 use clap::Parser;
+use rand::Rng;
 
 use cairn_p2p::config::{CairnConfig, MeshSettings};
 
@@ -56,22 +57,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(ServerCommand::Pair { pin, link, qr }) = &args.command {
         if *pin {
             // Generate and print PIN code
+            let mut rng = rand::thread_rng();
+            let first: u32 = rng.gen_range(0..10000);
+            let second: u32 = rng.gen_range(0..10000);
+            let pin_code = format!("{:04}-{:04}", first, second);
             eprintln!("Generating PIN code for pairing...");
-            println!("0000-0000"); // Placeholder
+            println!("{pin_code}");
             eprintln!("Enter this PIN on your device. Expires in 5 minutes.");
             return Ok(());
         }
         if *link {
             // Generate and print pairing link
+            let mut rng = rand::thread_rng();
+            let nonce_bytes: [u8; 16] = rng.gen();
+            let nonce: String = nonce_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+            let hostname = std::env::var("HOSTNAME")
+                .or_else(|_| std::env::var("CAIRN_HOSTNAME"))
+                .unwrap_or_else(|_| "cairn-server".to_string());
+            let mut uri = format!("cairn://pair/{nonce}");
+            if !server_config.signal_servers.is_empty() {
+                uri.push_str(&format!("?signal={}&host={hostname}", server_config.signal_servers[0]));
+            } else {
+                uri.push_str(&format!("?host={hostname}"));
+            }
             eprintln!("Generating pairing link...");
-            println!("cairn://pair?placeholder=true"); // Placeholder
+            println!("{uri}");
             eprintln!("Copy this link to your device. Expires in 5 minutes.");
             return Ok(());
         }
         if *qr {
-            // Generate and print QR code
-            eprintln!("Generating QR code...");
-            eprintln!("(QR code generation requires full pairing integration)");
+            // Generate a pairing link and display it as QR-encodable data
+            let mut rng = rand::thread_rng();
+            let nonce_bytes: [u8; 16] = rng.gen();
+            let nonce: String = nonce_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+            let hostname = std::env::var("HOSTNAME")
+                .or_else(|_| std::env::var("CAIRN_HOSTNAME"))
+                .unwrap_or_else(|_| "cairn-server".to_string());
+            let mut uri = format!("cairn://pair/{nonce}");
+            if !server_config.signal_servers.is_empty() {
+                uri.push_str(&format!("?signal={}&host={hostname}", server_config.signal_servers[0]));
+            } else {
+                uri.push_str(&format!("?host={hostname}"));
+            }
+            eprintln!("QR data (encode this string as a QR code):");
+            println!("{uri}");
             return Ok(());
         }
         eprintln!("Specify --pin, --link, or --qr");

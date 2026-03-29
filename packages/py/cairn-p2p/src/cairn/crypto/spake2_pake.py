@@ -17,9 +17,17 @@ class Spake2Session:
 
     def __init__(self, password: bytes, *, is_initiator: bool) -> None:
         if is_initiator:
-            self._session = spake2.SPAKE2_A(password)
+            self._session = spake2.SPAKE2_A(
+                password,
+                idA=b"cairn-initiator",
+                idB=b"cairn-responder",
+            )
         else:
-            self._session = spake2.SPAKE2_B(password)
+            self._session = spake2.SPAKE2_B(
+                password,
+                idA=b"cairn-initiator",
+                idB=b"cairn-responder",
+            )
         self._outbound: bytes | None = None
 
     def start(self) -> bytes:

@@ -14,6 +14,7 @@ from cairn.crypto.identity import IdentityKeypair, X25519Keypair
 from cairn.crypto.noise import HandshakeResult, NoiseXXHandshake, Role
 from cairn.crypto.ratchet import DoubleRatchet, RatchetHeader
 from cairn.crypto.spake2_pake import Spake2Session
+from cairn.crypto.storage import KeyStorage, get_default_storage
 from cairn.errors import CairnError
 from cairn.pairing.link import pair_from_link as _parse_link
 from cairn.pairing.link import pair_generate_link as _generate_link
@@ -92,9 +93,22 @@ class Node:
         self._listen_addresses: list[str] = []
         self._transport_ready: bool = False
 
+        # Wire key storage: use config-provided backend, or default to
+        # FilesystemKeyStorage with platform-appropriate paths.
+        self._key_storage: KeyStorage = (
+            config.key_storage
+            if config.key_storage is not None
+            else get_default_storage()
+        )
+
     @property
     def config(self) -> CairnConfig:
         return self._config
+
+    @property
+    def key_storage(self) -> KeyStorage:
+        """The key storage backend (FilesystemKeyStorage by default)."""
+        return self._key_storage
 
     @property
     def identity(self) -> IdentityKeypair:

@@ -310,10 +310,10 @@ describe('SPAKE2', () => {
     expect(key.length).toBe(32);
   });
 
-  it('outbound message is 32 bytes (compressed Ed25519 point)', () => {
+  it('outbound message is 33 bytes (side prefix + compressed Ed25519 point)', () => {
     const password = new TextEncoder().encode('test');
     const alice = Spake2.startA(password);
-    expect(alice.outboundMsg.length).toBe(32);
+    expect(alice.outboundMsg.length).toBe(33);
   });
 
   it('different sessions produce different outbound messages', () => {

@@ -437,7 +437,7 @@ mod tests {
         let mut queue = MessageQueue::new();
         let sender = make_peer(1);
         let recipient = make_peer(2);
-        let paired = make_paired_set(&[recipient.clone()]); // sender not paired
+        let paired = make_paired_set(std::slice::from_ref(&recipient)); // sender not paired
         let req = make_request(&recipient, 1);
         let ack = queue.enqueue(&req, &sender, &paired, None);
         assert!(!ack.accepted);
@@ -449,7 +449,7 @@ mod tests {
         let mut queue = MessageQueue::new();
         let sender = make_peer(1);
         let recipient = make_peer(2);
-        let paired = make_paired_set(&[sender.clone()]); // recipient not paired
+        let paired = make_paired_set(std::slice::from_ref(&sender)); // recipient not paired
         let req = make_request(&recipient, 1);
         let ack = queue.enqueue(&req, &sender, &paired, None);
         assert!(!ack.accepted);

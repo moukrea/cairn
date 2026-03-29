@@ -12,6 +12,13 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Spake2::class)]
 final class Spake2Test extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (!function_exists('sodium_crypto_core_ed25519_scalar_random')) {
+            $this->markTestSkipped('Ed25519 sodium functions not available');
+        }
+    }
+
     public function testMatchingPasswordsProduceMatchingSecrets(): void
     {
         $password = '123456';
@@ -51,10 +58,10 @@ final class Spake2Test extends TestCase
         $this->assertSame(32, strlen($secret));
     }
 
-    public function testOutboundMessageIs32Bytes(): void
+    public function testOutboundMessageIs33Bytes(): void
     {
         $sideA = Spake2::startA('password');
-        $this->assertSame(32, strlen($sideA->outboundMessage()));
+        $this->assertSame(33, strlen($sideA->outboundMessage()));
     }
 
     public function testFinishTwiceThrows(): void

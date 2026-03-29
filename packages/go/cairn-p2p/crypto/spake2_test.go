@@ -34,7 +34,6 @@ func TestSpake2MismatchedPasswordsYieldDifferentSecrets(t *testing.T) {
 	secretB, err := bob.Finish(msgA)
 	require.NoError(t, err)
 
-	// With different passwords, the secrets should NOT match
 	assert.NotEqual(t, secretA, secretB)
 }
 
@@ -61,14 +60,19 @@ func TestSpake2DifferentSessionsProduceDifferentSecrets(t *testing.T) {
 	_, err = bob2.Finish(msgA2)
 	require.NoError(t, err)
 
-	// Different random scalars -> different secrets
 	assert.NotEqual(t, secret1A, secret2A)
 }
 
-func TestSpake2MessageIs32Bytes(t *testing.T) {
+func TestSpake2MessageIs33Bytes(t *testing.T) {
 	_, msg, err := NewSpake2(RoleInitiator, []byte("test"))
 	require.NoError(t, err)
-	assert.Len(t, msg, 32)
+	assert.Len(t, msg, 33)
+	assert.Equal(t, byte(0x41), msg[0], "initiator side byte should be 0x41")
+
+	_, msg, err = NewSpake2(RoleResponder, []byte("test"))
+	require.NoError(t, err)
+	assert.Len(t, msg, 33)
+	assert.Equal(t, byte(0x42), msg[0], "responder side byte should be 0x42")
 }
 
 func TestSpake2EmptyPassword(t *testing.T) {
@@ -86,13 +90,22 @@ func TestSpake2EmptyPassword(t *testing.T) {
 }
 
 func TestSpake2InvalidPeerMessage(t *testing.T) {
-	_, _, err := NewSpake2(RoleInitiator, []byte("test"))
-	require.NoError(t, err)
-	// Note: we need a real spake2 instance to call Finish
 	alice, _, err := NewSpake2(RoleInitiator, []byte("test"))
 	require.NoError(t, err)
 
-	// Invalid point encoding
+	// Wrong length
 	_, err = alice.Finish([]byte{0xFF, 0xFF, 0xFF})
 	assert.Error(t, err)
+}
+
+func TestSpake2BadSideByte(t *testing.T) {
+	alice, _, err := NewSpake2(RoleInitiator, []byte("test"))
+	require.NoError(t, err)
+
+	// Initiator expects side byte 0x42, craft a message with 0x41
+	badMsg := make([]byte, 33)
+	badMsg[0] = 0x41 // wrong side
+	_, err = alice.Finish(badMsg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "bad side byte")
 }

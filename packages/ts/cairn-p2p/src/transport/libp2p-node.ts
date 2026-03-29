@@ -158,8 +158,10 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
     transports: transports as any[],
     streamMuxers: [yamux()],
     connectionEncrypters: [noise()],
+    // @ts-expect-error libp2p ServiceFactoryMap types are too strict for dynamic service maps
     services,
     connectionManager: {
+      // @ts-expect-error minConnections exists at runtime but is missing from ConnectionManagerInit typings
       minConnections: 0,
       maxConnections: 50,
       inactivityTimeout: 300_000,

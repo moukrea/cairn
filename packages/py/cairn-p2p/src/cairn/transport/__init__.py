@@ -28,6 +28,7 @@ from cairn.transport.nat import (
     NetworkInfo,
 )
 from cairn.transport.tcp import TcpTransport
+from cairn.transport.websocket import WebSocketTransport
 
 __all__ = [
     "BackoffConfig",
@@ -48,6 +49,7 @@ __all__ = [
     "QueuedMessage",
     "TcpTransport",
     "Transport",
+    "WebSocketTransport",
     "TransportAttempt",
     "TransportAttemptResult",
     "TransportExhaustedError",

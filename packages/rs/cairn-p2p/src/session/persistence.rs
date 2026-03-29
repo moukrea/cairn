@@ -318,7 +318,10 @@ mod tests {
         let all = load_all_sessions(&store).await.unwrap();
         assert_eq!(all.len(), 3);
 
-        let peer_ids: Vec<&str> = all.iter().map(|s| s.remote_libp2p_peer_id.as_str()).collect();
+        let peer_ids: Vec<&str> = all
+            .iter()
+            .map(|s| s.remote_libp2p_peer_id.as_str())
+            .collect();
         assert!(peer_ids.contains(&"peer-1"));
         assert!(peer_ids.contains(&"peer-2"));
         assert!(peer_ids.contains(&"peer-3"));
