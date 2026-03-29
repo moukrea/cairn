@@ -1239,7 +1239,7 @@ impl ApiNode {
             .send_request(remote_pid, init_envelope.encode()?)
             .await?;
 
-        let response_bytes = tokio::time::timeout(std::time::Duration::from_secs(30), rx)
+        let response_bytes = tokio::time::timeout(std::time::Duration::from_secs(90), rx)
             .await
             .map_err(|_| CairnError::Transport("handshake timed out waiting for response".into()))?
             .map_err(|_| CairnError::Transport("handshake response waiter dropped".into()))?;
@@ -1290,7 +1290,7 @@ impl ApiNode {
             .send_request(remote_pid, finish_envelope.encode()?)
             .await?;
 
-        let ack_bytes = tokio::time::timeout(std::time::Duration::from_secs(30), rx)
+        let ack_bytes = tokio::time::timeout(std::time::Duration::from_secs(90), rx)
             .await
             .map_err(|_| CairnError::Transport("handshake timed out waiting for ACK".into()))?
             .map_err(|_| CairnError::Transport("handshake ACK waiter dropped".into()))?;
