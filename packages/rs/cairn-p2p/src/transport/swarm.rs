@@ -531,11 +531,23 @@ use behaviour::CairnBehaviourEvent;
 /// Public IPFS bootstrap nodes for joining the global Kademlia DHT.
 /// These allow cairn peers to find each other across the internet without
 /// any cairn-specific infrastructure.
+///
+/// Uses resolved `/dns/` addresses instead of `/dnsaddr/` — the dnsaddr protocol
+/// requires TXT record resolution that libp2p's transport layer does not perform.
+/// Each node has QUIC (preferred) + TCP + WSS fallback addresses.
 pub const DEFAULT_BOOTSTRAP_NODES: &[&str] = &[
-    "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
-    "/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
-    "/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
-    "/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
+    // sv15 — San Jose
+    "/dns/sv15.bootstrap.libp2p.io/udp/4001/quic-v1/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+    "/dns/sv15.bootstrap.libp2p.io/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+    // ny5 — New York
+    "/dns/ny5.bootstrap.libp2p.io/udp/4001/quic-v1/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+    "/dns/ny5.bootstrap.libp2p.io/tcp/4001/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+    // am6 — Amsterdam
+    "/dns/am6.bootstrap.libp2p.io/udp/4001/quic-v1/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+    "/dns/am6.bootstrap.libp2p.io/tcp/4001/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+    // sg1 — Singapore
+    "/dns/sg1.bootstrap.libp2p.io/udp/4001/quic-v1/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
+    "/dns/sg1.bootstrap.libp2p.io/tcp/4001/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
 ];
 
 /// Extract the PeerId from the last `/p2p/<peer_id>` component of a multiaddr.
@@ -774,6 +786,13 @@ async fn run_event_loop(
     let mut pending_kad_gets: std::collections::HashMap<libp2p::kad::QueryId, KadGetReply> =
         std::collections::HashMap::new();
 
+    // Pending Kademlia START_PROVIDING queries: query_id -> reply sender.
+    type KadStartProvidingReply = oneshot::Sender<Result<()>>;
+    let mut pending_kad_start_providing: std::collections::HashMap<
+        libp2p::kad::QueryId,
+        KadStartProvidingReply,
+    > = std::collections::HashMap::new();
+
     // Pending Kademlia GET_PROVIDERS queries: query_id -> (reply sender, accumulated providers).
     type KadGetProvidersReply = oneshot::Sender<Result<Vec<PeerId>>>;
     let mut pending_kad_get_providers: std::collections::HashMap<
@@ -857,15 +876,22 @@ async fn run_event_loop(
                     }
                     Some(SwarmCommand::KadStartProviding { key, reply }) => {
                         let record_key = libp2p::kad::RecordKey::new(&key);
-                        let result = swarm
+                        match swarm
                             .behaviour_mut()
                             .kademlia
                             .start_providing(record_key)
-                            .map(|_| ())
-                            .map_err(|e| {
-                                CairnError::Transport(format!("kad start_providing failed: {e:?}"))
-                            });
-                        let _ = reply.send(result);
+                        {
+                            Ok(query_id) => {
+                                // Defer reply until the StartProviding event confirms
+                                // the record was actually propagated to DHT peers.
+                                pending_kad_start_providing.insert(query_id, reply);
+                            }
+                            Err(e) => {
+                                let _ = reply.send(Err(CairnError::Transport(
+                                    format!("kad start_providing failed: {e:?}"),
+                                )));
+                            }
+                        }
                     }
                     Some(SwarmCommand::KadGetProviders { key, reply }) => {
                         let record_key = libp2p::kad::RecordKey::new(&key);
@@ -1030,16 +1056,27 @@ async fn run_event_loop(
                     }
                     LibSwarmEvent::Behaviour(CairnBehaviourEvent::Kademlia(
                         libp2p::kad::Event::OutboundQueryProgressed {
+                            id,
                             result: libp2p::kad::QueryResult::StartProviding(result),
                             ..
                         },
                     )) => {
-                        match result {
+                        match &result {
                             Ok(ok) => info!(
                                 key = ?ok.key,
-                                "Kademlia: started providing"
+                                "Kademlia: provider record propagated to DHT"
                             ),
                             Err(e) => warn!(?e, "Kademlia: start providing failed"),
+                        }
+                        if let Some(reply) = pending_kad_start_providing.remove(&id) {
+                            match result {
+                                Ok(_) => { let _ = reply.send(Ok(())); }
+                                Err(e) => {
+                                    let _ = reply.send(Err(CairnError::Transport(
+                                        format!("DHT provider record propagation failed: {e:?}"),
+                                    )));
+                                }
+                            }
                         }
                         None
                     }
