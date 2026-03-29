@@ -1,4 +1,4 @@
-"""Pairing mechanisms: QR, PIN, link, SAS, adapter, rate limiting."""
+"""Pairing mechanisms: QR, PIN, link, PSK, SAS, state machine, adapter, rate limiting."""
 
 from cairn.pairing.adapter import PairingAdapter
 from cairn.pairing.link import pair_from_link, pair_generate_link
@@ -11,6 +11,15 @@ from cairn.pairing.pin import (
     normalize_pin,
     pair_enter_pin,
     pair_generate_pin,
+)
+from cairn.pairing.psk import (
+    EmptyKeyError,
+    InsufficientEntropyError,
+    PskError,
+    PskMechanism,
+    derive_psk_rendezvous_id,
+    psk_to_pake_input,
+    validate_psk_entropy,
 )
 from cairn.pairing.qr import (
     pair_generate_qr,
@@ -29,19 +38,48 @@ from cairn.pairing.sas import (
     verify_emoji_sas,
     verify_numeric_sas,
 )
+from cairn.pairing.state_machine import (
+    DEFAULT_PAIRING_TIMEOUT,
+    InvalidTransitionError,
+    PairRejectReason,
+    PairingError,
+    PairingFlowType,
+    PairingRole,
+    PairingSession,
+    PairingState,
+    PairingTimeoutError,
+    PakeFailureError,
+    RejectedError,
+)
 
 __all__ = [
     "AutoInvalidatedError",
     "ConnectionHint",
+    "DEFAULT_PAIRING_TIMEOUT",
+    "EmptyKeyError",
+    "InsufficientEntropyError",
+    "InvalidTransitionError",
+    "PairRejectReason",
     "PairingAdapter",
+    "PairingError",
+    "PairingFlowType",
     "PairingPayload",
+    "PairingRole",
+    "PairingSession",
+    "PairingState",
+    "PairingTimeoutError",
+    "PakeFailureError",
+    "PskError",
+    "PskMechanism",
     "RateLimitError",
     "RateLimiter",
+    "RejectedError",
     "WindowExceededError",
     "decode_crockford",
     "derive_emoji_sas",
     "derive_numeric_sas",
     "derive_pin_rendezvous_id",
+    "derive_psk_rendezvous_id",
     "encode_crockford",
     "format_pin",
     "normalize_pin",
@@ -51,7 +89,9 @@ __all__ = [
     "pair_generate_pin",
     "pair_generate_qr",
     "pair_scan_qr",
+    "psk_to_pake_input",
     "render_qr",
+    "validate_psk_entropy",
     "verify_emoji_sas",
     "verify_numeric_sas",
 ]
