@@ -64,9 +64,21 @@ async fn main() {
 
     // Listen on explicit addresses for all three transports.
     config.listen_addresses = Some(vec![
-        format!("/ip4/{}/tcp/{}", parse_host(&args.tcp_addr), parse_port(&args.tcp_addr)),
-        format!("/ip4/{}/udp/{}/quic-v1", parse_host(&args.quic_addr), parse_port(&args.quic_addr)),
-        format!("/ip4/{}/tcp/{}/ws", parse_host(&args.ws_addr), parse_port(&args.ws_addr)),
+        format!(
+            "/ip4/{}/tcp/{}",
+            parse_host(&args.tcp_addr),
+            parse_port(&args.tcp_addr)
+        ),
+        format!(
+            "/ip4/{}/udp/{}/quic-v1",
+            parse_host(&args.quic_addr),
+            parse_port(&args.quic_addr)
+        ),
+        format!(
+            "/ip4/{}/tcp/{}/ws",
+            parse_host(&args.ws_addr),
+            parse_port(&args.ws_addr)
+        ),
     ]);
 
     let node = match cairn_p2p::create_and_start_with_config(config).await {
