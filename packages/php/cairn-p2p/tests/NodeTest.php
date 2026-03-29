@@ -222,6 +222,9 @@ final class NodeTest extends TestCase
 
     public function testPairScanQrRoundtrip(): void
     {
+        if (!function_exists('sodium_crypto_core_ed25519_scalar_random')) {
+            $this->markTestSkipped('Ed25519 sodium functions not available');
+        }
         $node = Node::create();
         $result = $node->pairGenerateQr();
 
