@@ -102,10 +102,15 @@ describe('Node pairing', () => {
     expect(data.expiresIn).toBe(node.config.reconnectionPolicy.pairingPayloadExpiry);
   });
 
-  it('pairEnterPin succeeds with valid pin', async () => {
+  it('pairEnterPin succeeds with valid pin and remotePeerId', async () => {
     const node = await Node.create();
-    const peerId = await node.pairEnterPin('ABCD-EFGH');
-    expect(peerId).toBeTruthy();
+    const peerId = await node.pairEnterPin('ABCD-EFGH', 'test-peer-id-123');
+    expect(peerId).toBe('test-peer-id-123');
+  });
+
+  it('pairEnterPin throws without remotePeerId when DHT unavailable', async () => {
+    const node = await Node.create();
+    await expect(node.pairEnterPin('ABCD-EFGH')).rejects.toThrow('Could not determine remote peer ID');
   });
 
   it('pairEnterPin rejects invalid characters', async () => {
