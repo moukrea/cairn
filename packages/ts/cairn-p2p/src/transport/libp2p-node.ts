@@ -141,6 +141,7 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
   // Build the services object. In browsers, add identify (required for
   // circuit relay and WebRTC) and optionally bootstrap for DHT discovery.
   const services: Record<string, unknown> = {};
+  const peerDiscovery: unknown[] = [];
   if (!isNodeEnvironment()) {
     const { identify } = await import('@libp2p/identify');
     services.identify = identify();
@@ -150,6 +151,20 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
       const { kadDHT } = await import('@libp2p/kad-dht');
       services.dht = kadDHT({ clientMode: true });
     } catch { /* @libp2p/kad-dht not available */ }
+
+    // Bootstrap peers — WSS addresses of IPFS DHT bootstrap nodes.
+    // Required for the browser's Kademlia routing table to have peers to query.
+    try {
+      const { bootstrap } = await import('@libp2p/bootstrap');
+      peerDiscovery.push(bootstrap({
+        list: [
+          '/dns/sv15.bootstrap.libp2p.io/tcp/443/wss/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN',
+          '/dns/ny5.bootstrap.libp2p.io/tcp/443/wss/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa',
+          '/dns/am6.bootstrap.libp2p.io/tcp/443/wss/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb',
+          '/dns/sg1.bootstrap.libp2p.io/tcp/443/wss/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt',
+        ],
+      }));
+    } catch { /* @libp2p/bootstrap not available */ }
   }
 
   const node = await createLibp2p({
@@ -160,6 +175,7 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
     connectionEncrypters: [noise()],
     // @ts-expect-error libp2p ServiceFactoryMap types are too strict for dynamic service maps
     services,
+    ...(peerDiscovery.length > 0 ? { peerDiscovery: peerDiscovery as any[] } : {}),
     connectionManager: {
       // @ts-expect-error minConnections exists at runtime but is missing from ConnectionManagerInit typings
       minConnections: 0,
