@@ -142,6 +142,7 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
   // circuit relay and WebRTC) and optionally bootstrap for DHT discovery.
   const services: Record<string, unknown> = {};
   const peerDiscovery: unknown[] = [];
+  const bootstrapPeerIds = new Set<string>();
   if (!isNodeEnvironment()) {
     const { identify } = await import('@libp2p/identify');
     services.identify = identify();
@@ -156,15 +157,21 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
     // Required for the browser's Kademlia routing table to have peers to query.
     try {
       const { bootstrap } = await import('@libp2p/bootstrap');
-      peerDiscovery.push(bootstrap({
-        list: [
-          '/dns/sv15.bootstrap.libp2p.io/tcp/443/wss/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN',
-          '/dns/ny5.bootstrap.libp2p.io/tcp/443/wss/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa',
-          '/dns/am6.bootstrap.libp2p.io/tcp/443/wss/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb',
-          '/dns/sg1.bootstrap.libp2p.io/tcp/443/wss/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt',
-        ],
-      }));
-    } catch { /* @libp2p/bootstrap not available */ }
+      const bootstrapList = [
+        '/dns/sv15.bootstrap.libp2p.io/tcp/443/wss/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN',
+        '/dns/ny5.bootstrap.libp2p.io/tcp/443/wss/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa',
+        '/dns/am6.bootstrap.libp2p.io/tcp/443/wss/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb',
+        '/dns/sg1.bootstrap.libp2p.io/tcp/443/wss/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt',
+      ];
+      for (const addr of bootstrapList) {
+        const peerId = addr.split('/p2p/')[1];
+        if (peerId) bootstrapPeerIds.add(peerId);
+      }
+      peerDiscovery.push(bootstrap({ list: bootstrapList }));
+      console.log('[cairn] Bootstrap configured with', bootstrapList.length, 'WSS peers');
+    } catch (e) {
+      console.warn('[cairn] Bootstrap module not available:', e);
+    }
   }
 
   const node = await createLibp2p({
@@ -183,6 +190,33 @@ export async function createCairnNode(options?: CreateNodeOptions): Promise<Libp
       inactivityTimeout: 300_000,
     },
   });
+
+  // Diagnostic logging for bootstrap peer connectivity (browser only).
+  if (bootstrapPeerIds.size > 0) {
+    let connectedBootstrap = 0;
+    node.addEventListener('peer:connect', (evt: any) => {
+      const peerId = evt.detail?.toString?.() ?? String(evt.detail);
+      if (bootstrapPeerIds.has(peerId)) {
+        connectedBootstrap++;
+        console.log(`[cairn] Bootstrap peer connected: ${peerId.slice(0, 16)}... (${connectedBootstrap}/${bootstrapPeerIds.size})`);
+      }
+    });
+    node.addEventListener('peer:disconnect', (evt: any) => {
+      const peerId = evt.detail?.toString?.() ?? String(evt.detail);
+      if (bootstrapPeerIds.has(peerId)) {
+        connectedBootstrap = Math.max(0, connectedBootstrap - 1);
+        console.warn(`[cairn] Bootstrap peer disconnected: ${peerId.slice(0, 16)}... (${connectedBootstrap}/${bootstrapPeerIds.size} remaining)`);
+      }
+    });
+    // Log a summary after a short delay to catch early failures.
+    setTimeout(() => {
+      if (connectedBootstrap === 0) {
+        console.warn('[cairn] No bootstrap peers connected after 15s — DHT discovery will not work');
+      } else {
+        console.log(`[cairn] DHT bootstrap healthy: ${connectedBootstrap}/${bootstrapPeerIds.size} peers connected`);
+      }
+    }, 15_000);
+  }
 
   return node;
 }
