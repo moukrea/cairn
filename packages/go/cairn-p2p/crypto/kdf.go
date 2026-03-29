@@ -12,11 +12,13 @@ import (
 
 // HKDF domain separation constants (must match Rust exactly).
 var (
-	HkdfInfoSessionKey = []byte("cairn-session-key-v1")
-	HkdfInfoRendezvous = []byte("cairn-rendezvous-id-v1")
-	HkdfInfoSAS        = []byte("cairn-sas-derivation-v1")
-	HkdfInfoChainKey   = []byte("cairn-chain-key-v1")
-	HkdfInfoMessageKey = []byte("cairn-message-key-v1")
+	HkdfInfoSessionKey        = []byte("cairn-session-key-v1")
+	HkdfInfoRendezvous        = []byte("cairn-rendezvous-v1")
+	HkdfInfoPairingRendezvous = []byte("cairn-pairing-rendezvous-v1")
+	HkdfInfoEpochOffset       = []byte("cairn-epoch-offset-v1")
+	HkdfInfoSAS               = []byte("cairn-sas-derivation-v1")
+	HkdfInfoChainKey          = []byte("cairn-chain-key-v1")
+	HkdfInfoMessageKey        = []byte("cairn-message-key-v1")
 )
 
 // X25519Keypair is an X25519 keypair for Diffie-Hellman key exchange.

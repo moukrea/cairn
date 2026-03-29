@@ -36,85 +36,170 @@ func TestDeriveRendezvousIDDifferentSecrets(t *testing.T) {
 	assert.NotEqual(t, id1, id2)
 }
 
-func TestCurrentEpochReturnsNonZero(t *testing.T) {
-	epoch := CurrentEpoch(DefaultRotationInterval)
-	assert.Greater(t, epoch, uint64(0))
+func TestDeriveRendezvousIDDifferentEpochsDiffer(t *testing.T) {
+	secret := []byte("shared-pairing-secret")
+	id1, err := DeriveRendezvousID(secret, 1)
+	require.NoError(t, err)
+	id2, err := DeriveRendezvousID(secret, 2)
+	require.NoError(t, err)
+	assert.NotEqual(t, id1, id2)
 }
 
-func TestEpochAtDeterministic(t *testing.T) {
-	fixed := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
-	epoch := EpochAt(fixed, DefaultRotationInterval)
-	// 2025-06-15 12:00 UTC = 1750075200 seconds since epoch
-	// 1750075200 / 86400 = 20255.0 days
-	expected := uint64(fixed.Unix()) / uint64(DefaultRotationInterval.Seconds())
-	assert.Equal(t, expected, epoch)
+func TestDerivePairingRendezvousIDDeterministic(t *testing.T) {
+	cred := []byte("pake-credential")
+	nonce := []byte("nonce-123")
+	id1, err := DerivePairingRendezvousID(cred, nonce)
+	require.NoError(t, err)
+	id2, err := DerivePairingRendezvousID(cred, nonce)
+	require.NoError(t, err)
+	assert.Equal(t, id1, id2)
 }
 
-func TestEpochBoundaryChangesEpoch(t *testing.T) {
-	rotation := 1 * time.Hour // 1h rotation for testing
-	t1 := time.Date(2025, 1, 1, 10, 30, 0, 0, time.UTC)
-	t2 := time.Date(2025, 1, 1, 11, 30, 0, 0, time.UTC)
-	e1 := EpochAt(t1, rotation)
-	e2 := EpochAt(t2, rotation)
+func TestDerivePairingRendezvousDiffersFromStandard(t *testing.T) {
+	secret := []byte("same-input")
+	standard, err := DeriveRendezvousID(secret, 1)
+	require.NoError(t, err)
+	epochSalt := []byte{0, 0, 0, 0, 0, 0, 0, 1} // epoch 1 as big-endian
+	pairing, err := DerivePairingRendezvousID(secret, epochSalt)
+	require.NoError(t, err)
+	assert.NotEqual(t, standard, pairing)
+}
+
+// --- Epoch computation tests ---
+
+func TestComputeEpochDeterministic(t *testing.T) {
+	secret := []byte("test-secret")
+	interval := time.Hour
+	ts := uint64(1700000000)
+	e1, err := ComputeEpoch(secret, interval, ts)
+	require.NoError(t, err)
+	e2, err := ComputeEpoch(secret, interval, ts)
+	require.NoError(t, err)
+	assert.Equal(t, e1, e2)
+}
+
+func TestComputeEpochAdvancesWithTime(t *testing.T) {
+	secret := []byte("test-secret")
+	interval := time.Hour
+	e1, err := ComputeEpoch(secret, interval, 1700000000)
+	require.NoError(t, err)
+	e2, err := ComputeEpoch(secret, interval, 1700000000+3600)
+	require.NoError(t, err)
+	assert.Equal(t, e2, e1+1)
+}
+
+func TestComputeEpochZeroIntervalRejected(t *testing.T) {
+	_, err := ComputeEpoch([]byte("secret"), 0, 1700000000)
+	assert.Error(t, err)
+}
+
+func TestComputeEpochDifferentSecretsDifferentOffsets(t *testing.T) {
+	interval := time.Hour
+	ts := uint64(1700000000)
+	e1, err := ComputeEpoch([]byte("secret-a"), interval, ts)
+	require.NoError(t, err)
+	e2, err := ComputeEpoch([]byte("secret-b"), interval, ts)
+	require.NoError(t, err)
 	assert.NotEqual(t, e1, e2)
 }
 
-// --- Overlap tests ---
-
-func TestIsInOverlapAtBoundary(t *testing.T) {
-	rotation := 1 * time.Hour
-	overlap := 10 * time.Minute
-
-	// Right at the boundary (t = 0 mod rotation)
-	boundary := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
-	assert.True(t, IsInOverlapAt(boundary, rotation, overlap))
+func TestCurrentEpochReturnsNonZero(t *testing.T) {
+	epoch, err := CurrentEpoch([]byte("test-secret"), DefaultRotationInterval)
+	require.NoError(t, err)
+	assert.Greater(t, epoch, uint64(0))
 }
 
-func TestIsInOverlapJustBeforeBoundary(t *testing.T) {
-	rotation := 1 * time.Hour
-	overlap := 10 * time.Minute
+// --- ActiveRendezvousIDs tests ---
 
-	// 4 minutes before the boundary (within overlap/2 = 5min)
-	justBefore := time.Date(2025, 1, 1, 9, 56, 0, 0, time.UTC)
-	assert.True(t, IsInOverlapAt(justBefore, rotation, overlap))
+func TestActiveRendezvousIDsSingleOutsideOverlap(t *testing.T) {
+	secret := []byte("test-secret")
+	config := DefaultRotationConfig()
+
+	// Find a timestamp well within the middle of an epoch
+	offset, err := deriveEpochOffset(secret)
+	require.NoError(t, err)
+	interval := uint64(config.RotationInterval.Seconds())
+	baseTs := uint64(1700000000)
+	adjusted := baseTs + offset
+	position := adjusted % interval
+	halfOverlap := uint64(config.OverlapWindow.Seconds())/2 + uint64(config.ClockTolerance.Seconds())
+
+	midTs := baseTs + (interval/2 - position)
+	adjustedMid := midTs + offset
+	posMid := adjustedMid % interval
+
+	if posMid >= halfOverlap && posMid <= interval-halfOverlap {
+		ids, err := ActiveRendezvousIDs(secret, config, midTs)
+		require.NoError(t, err)
+		assert.Len(t, ids, 1)
+	}
 }
 
-func TestIsInOverlapJustAfterBoundary(t *testing.T) {
-	rotation := 1 * time.Hour
-	overlap := 10 * time.Minute
+func TestActiveRendezvousIDsDualNearBoundary(t *testing.T) {
+	secret := []byte("test-secret")
+	config := DefaultRotationConfig()
 
-	// 3 minutes after the boundary (within overlap/2 = 5min)
-	justAfter := time.Date(2025, 1, 1, 10, 3, 0, 0, time.UTC)
-	assert.True(t, IsInOverlapAt(justAfter, rotation, overlap))
+	offset, err := deriveEpochOffset(secret)
+	require.NoError(t, err)
+	interval := uint64(config.RotationInterval.Seconds())
+
+	// Find a timestamp right at an epoch boundary
+	n := (uint64(1700000000) + offset) / interval + 1
+	boundaryAdjusted := n * interval
+	boundaryTs := boundaryAdjusted - offset
+
+	// Just after the boundary
+	ids, err := ActiveRendezvousIDs(secret, config, boundaryTs+100)
+	require.NoError(t, err)
+	assert.Len(t, ids, 2, "should have 2 IDs near epoch boundary (just after)")
+
+	// Just before the boundary
+	ids, err = ActiveRendezvousIDs(secret, config, boundaryTs-100)
+	require.NoError(t, err)
+	assert.Len(t, ids, 2, "should have 2 IDs near epoch boundary (just before)")
 }
 
-func TestNotInOverlapMidEpoch(t *testing.T) {
-	rotation := 1 * time.Hour
-	overlap := 10 * time.Minute
+func TestActiveRendezvousIDsIncludesCurrentEpochID(t *testing.T) {
+	secret := []byte("test-secret")
+	config := DefaultRotationConfig()
+	ts := uint64(1700000000)
 
-	// 30 minutes into the epoch — well outside 5min overlap
-	mid := time.Date(2025, 1, 1, 10, 30, 0, 0, time.UTC)
-	assert.False(t, IsInOverlapAt(mid, rotation, overlap))
+	ids, err := ActiveRendezvousIDs(secret, config, ts)
+	require.NoError(t, err)
+
+	epoch, err := ComputeEpoch(secret, config.RotationInterval, ts)
+	require.NoError(t, err)
+	expectedID, err := DeriveRendezvousID(secret, epoch)
+	require.NoError(t, err)
+
+	found := false
+	for _, id := range ids {
+		if assert.ObjectsAreEqual(id, expectedID) {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "active IDs must include current epoch's ID")
 }
 
-// --- ActiveEpochs tests ---
-
-func TestActiveEpochsSingleOutsideOverlap(t *testing.T) {
-	rotation := 1 * time.Hour
-	overlap := 10 * time.Minute
-	mid := time.Date(2025, 1, 1, 10, 30, 0, 0, time.UTC) // mid-epoch
-	epochs := ActiveEpochs(mid, rotation, overlap)
-	assert.Len(t, epochs, 1)
+func TestActiveRendezvousIDsNowReturnsAtLeastOne(t *testing.T) {
+	ids, err := ActiveRendezvousIDsNow([]byte("secret"), DefaultRotationConfig())
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(ids), 1)
+	assert.LessOrEqual(t, len(ids), 2)
 }
 
-func TestActiveEpochsDualDuringOverlap(t *testing.T) {
-	rotation := 1 * time.Hour
-	overlap := 10 * time.Minute
-	boundary := time.Date(2025, 1, 1, 10, 2, 0, 0, time.UTC) // just after boundary
-	epochs := ActiveEpochs(boundary, rotation, overlap)
-	assert.Len(t, epochs, 2)
-	// Current and previous
-	assert.Equal(t, epochs[1], epochs[0]-1)
+// --- Cross-language test vectors ---
+
+func TestDeriveRendezvousIDMatchesRust(t *testing.T) {
+	// Test vector generated from Rust/Python HKDF-SHA256 with:
+	//   IKM: "shared-pairing-secret", salt: epoch=42 as big-endian u64,
+	//   info: "cairn-rendezvous-v1", output: 32 bytes
+	secret := []byte("shared-pairing-secret")
+	id, err := DeriveRendezvousID(secret, 42)
+	require.NoError(t, err)
+	expected := "5d7d828909a532f5fa29d721a875413ef1a6e3fb5a34412eb0a317e347224b19"
+	assert.Equal(t, expected, fmt.Sprintf("%x", id))
 }
 
 // --- DiscoveryBackend interface compliance tests ---
@@ -182,6 +267,27 @@ func TestDhtPublishEmptyIDReturnsError(t *testing.T) {
 	d := NewDhtDiscovery()
 	err := d.Publish(context.Background(), nil, []byte("value"))
 	assert.Error(t, err)
+}
+
+func TestDhtQueryLocalHit(t *testing.T) {
+	d := NewDhtDiscovery()
+	key := []byte("test-key-12345678901234567890ab")
+	value := []byte("test-reachability-data")
+
+	err := d.Publish(context.Background(), key, value)
+	require.NoError(t, err)
+
+	results, err := d.Query(context.Background(), key)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, value, results[0])
+}
+
+func TestDhtQueryLocalMiss(t *testing.T) {
+	d := NewDhtDiscovery()
+	results, err := d.Query(context.Background(), []byte("unknown-key"))
+	assert.NoError(t, err)
+	assert.Nil(t, results)
 }
 
 func TestDhtClose(t *testing.T) {
@@ -256,8 +362,8 @@ func (m *mockBackend) Publish(ctx context.Context, rendezvousID, reachability []
 func (m *mockBackend) Query(ctx context.Context, rendezvousID []byte) ([][]byte, error) {
 	return m.queryResult, m.queryErr
 }
-func (m *mockBackend) Name() string   { return m.name }
-func (m *mockBackend) Close() error   { return nil }
+func (m *mockBackend) Name() string { return m.name }
+func (m *mockBackend) Close() error { return nil }
 
 func TestMultiBackendQueryFirstSuccess(t *testing.T) {
 	failing := &mockBackend{name: "failing", queryErr: fmt.Errorf("fail")}
@@ -309,13 +415,4 @@ func TestMultiBackendClose(t *testing.T) {
 	b2 := &mockBackend{name: "b2"}
 	mbd := NewMultiBackendDiscovery(b1, b2)
 	assert.NoError(t, mbd.Close())
-}
-
-// --- RendezvousIDsForPeer test ---
-
-func TestRendezvousIDsForPeerReturnsAtLeastOne(t *testing.T) {
-	ids, err := RendezvousIDsForPeer([]byte("secret"), DefaultRotationInterval, DefaultOverlapWindow)
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(ids), 1)
-	assert.LessOrEqual(t, len(ids), 2)
 }
