@@ -123,6 +123,12 @@ final class CairnConfig
         public readonly ?string $appIdentifier = null,
         /** PIN format configuration. */
         public readonly PinFormatConfig $pinFormat = new PinFormatConfig(),
+        /** Auto-approve all valid pairing requests (kiosk/open mode). */
+        public readonly bool $autoApprovePairing = false,
+        /** Optional second-layer password for pairing authentication. */
+        public readonly ?string $pairingPassword = null,
+        /** Optional human-readable message attached to pairing requests. */
+        public readonly ?string $pairingMessage = null,
     ) {
     }
 

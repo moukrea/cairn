@@ -238,6 +238,12 @@ pub struct CairnConfig {
     pub app_identifier: Option<String>,
     /// Customizable PIN format for pairing codes.
     pub pin_format: PinFormat,
+    /// Auto-approve all valid pairing requests (useful for kiosk/open scenarios).
+    pub auto_approve_pairing: bool,
+    /// Optional pairing password for second-layer authentication after PIN verification.
+    pub pairing_password: Option<String>,
+    /// Optional human-readable message attached to pairing requests.
+    pub pairing_message: Option<String>,
 }
 
 /// PIN format configuration.
@@ -297,6 +303,9 @@ impl Default for CairnConfig {
             manifest_config: None,
             app_identifier: None,
             pin_format: PinFormat::default(),
+            auto_approve_pairing: false,
+            pairing_password: None,
+            pairing_message: None,
         }
     }
 }

@@ -27,6 +27,15 @@ type Config struct {
 
 	// PinFormat configures the pairing PIN code format.
 	PinFormat PinFormatConfig
+
+	// AutoApprovePairing auto-accepts all valid pairing requests (kiosk/open mode).
+	AutoApprovePairing bool
+
+	// PairingPassword is an optional second-layer password for pairing authentication.
+	PairingPassword string
+
+	// PairingMessage is an optional human-readable message attached to pairing requests.
+	PairingMessage string
 }
 
 // PinFormatConfig configures PIN code generation format.

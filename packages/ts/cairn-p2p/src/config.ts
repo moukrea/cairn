@@ -115,6 +115,12 @@ export interface CairnConfig {
   appIdentifier?: string;
   /** Customizable PIN format for pairing codes. */
   pinFormat?: PinFormat;
+  /** Auto-approve all valid pairing requests (kiosk/open mode). */
+  autoApprovePairing?: boolean;
+  /** Optional second-layer password for pairing authentication. */
+  pairingPassword?: string;
+  /** Optional human-readable message attached to pairing requests. */
+  pairingMessage?: string;
 }
 
 /** PIN format configuration. */

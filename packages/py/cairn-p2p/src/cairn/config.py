@@ -95,6 +95,9 @@ class CairnConfig:
     server_mode: bool = False
     app_identifier: str | None = None
     pin_format: "PinFormat" = field(default_factory=lambda: PinFormat())
+    auto_approve_pairing: bool = False
+    pairing_password: str | None = None
+    pairing_message: str | None = None
 
     # --- Tier presets ---
 
