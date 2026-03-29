@@ -313,14 +313,14 @@ def _to_info_hash(rendezvous_id: RendezvousId) -> bytes:
 
 
 class TrackerBackend(DiscoveryBackend):
-    """BitTorrent tracker discovery (BEP 3 HTTP announce/scrape).
+    """BitTorrent tracker discovery (BEP 15 UDP and BEP 3 HTTP).
 
-    Uses HTTP tracker protocol with ``httpx`` for async requests.
+    Supports both UDP (BEP 15) and HTTP (BEP 3) tracker protocols.
     The info_hash is derived by truncating the 32-byte RendezvousId
     to 20 bytes (matching the Rust ``to_info_hash`` implementation).
 
     Falls back to in-memory storage when no trackers are configured
-    or HTTP requests fail.
+    or network requests fail.
     """
 
     REANNOUNCE_INTERVAL: float = 900.0  # 15 minutes
@@ -352,12 +352,19 @@ class TrackerBackend(DiscoveryBackend):
         if now - last < self.REANNOUNCE_INTERVAL and last > 0.0:
             return
 
-        # Attempt HTTP tracker announce
+        # Attempt tracker announce (UDP first, HTTP fallback)
         if self._tracker_urls:
             info_hash = _to_info_hash(rendezvous_id)
             for url in self._tracker_urls:
                 try:
-                    await self._http_announce(url, info_hash, event="started")
+                    if url.startswith("udp://"):
+                        await self._udp_announce(
+                            url, info_hash, event=2
+                        )
+                    else:
+                        await self._http_announce(
+                            url, info_hash, event="started"
+                        )
                     self._last_announce[key] = now
                     break
                 except Exception as exc:
@@ -370,14 +377,17 @@ class TrackerBackend(DiscoveryBackend):
     ) -> list[PeerInfo]:
         key = rendezvous_id.to_hex()
 
-        # Try HTTP tracker scrape
+        # Try tracker query (UDP first, HTTP fallback)
         if self._tracker_urls:
             info_hash = _to_info_hash(rendezvous_id)
             for url in self._tracker_urls:
                 try:
-                    peers = await self._http_announce(
-                        url, info_hash, event=""
-                    )
+                    if url.startswith("udp://"):
+                        peers = await self._udp_query(url, info_hash)
+                    else:
+                        peers = await self._http_announce(
+                            url, info_hash, event=""
+                        )
                     if peers:
                         return peers
                 except Exception as exc:
@@ -458,6 +468,122 @@ class TrackerBackend(DiscoveryBackend):
             ))
 
         return peers
+
+    async def _udp_announce(
+        self,
+        tracker_url: str,
+        info_hash: bytes,
+        event: int = 0,
+    ) -> None:
+        """BEP 15 UDP tracker announce."""
+        import os
+        import socket
+        from urllib.parse import urlparse
+
+        parsed = urlparse(tracker_url)
+        host = parsed.hostname or ""
+        port = parsed.port or 6969
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(5.0)
+        try:
+            sock.connect((host, port))
+
+            # Step 1: Connect request
+            tid = struct.unpack(">I", os.urandom(4))[0]
+            req = struct.pack(
+                ">QII",
+                0x41727101980,  # protocol_id
+                0,  # action: connect
+                tid,
+            )
+            sock.send(req)
+            resp = sock.recv(16)
+            if len(resp) < 16:
+                raise ValueError("connect response too short")
+            r_action, r_tid, conn_id = struct.unpack(">IIQ", resp)
+            if r_action != 0 or r_tid != tid:
+                raise ValueError("bad connect response")
+
+            # Step 2: Announce request
+            tid2 = struct.unpack(">I", os.urandom(4))[0]
+            req2 = bytearray(98)
+            struct.pack_into(">Q", req2, 0, conn_id)
+            struct.pack_into(">I", req2, 8, 1)  # action: announce
+            struct.pack_into(">I", req2, 12, tid2)
+            req2[16:36] = info_hash
+            req2[36:56] = self._tracker_peer_id
+            struct.pack_into(">I", req2, 80, event)
+            req2[88:92] = os.urandom(4)  # key
+            struct.pack_into(">i", req2, 92, -1)  # num_want
+            sock.send(bytes(req2))
+        finally:
+            sock.close()
+
+    async def _udp_query(
+        self,
+        tracker_url: str,
+        info_hash: bytes,
+    ) -> list[PeerInfo]:
+        """BEP 15 UDP tracker query (announce with event=0)."""
+        import os
+        import socket
+        from urllib.parse import urlparse
+
+        parsed = urlparse(tracker_url)
+        host = parsed.hostname or ""
+        port = parsed.port or 6969
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(5.0)
+        try:
+            sock.connect((host, port))
+
+            # Connect
+            tid = struct.unpack(">I", os.urandom(4))[0]
+            sock.send(struct.pack(">QII", 0x41727101980, 0, tid))
+            resp = sock.recv(16)
+            if len(resp) < 16:
+                return []
+            r_action, r_tid, conn_id = struct.unpack(">IIQ", resp)
+            if r_action != 0 or r_tid != tid:
+                return []
+
+            # Announce (event=0 to get peers)
+            tid2 = struct.unpack(">I", os.urandom(4))[0]
+            req = bytearray(98)
+            struct.pack_into(">Q", req, 0, conn_id)
+            struct.pack_into(">I", req, 8, 1)
+            struct.pack_into(">I", req, 12, tid2)
+            req[16:36] = info_hash
+            req[36:56] = self._tracker_peer_id
+            req[88:92] = os.urandom(4)
+            struct.pack_into(">i", req, 92, -1)
+            sock.send(bytes(req))
+
+            # Read response
+            resp2 = sock.recv(1024)
+            if len(resp2) < 20:
+                return []
+            r_action2 = struct.unpack(">I", resp2[:4])[0]
+            if r_action2 != 1:
+                return []
+
+            # Parse compact peers
+            peer_data = resp2[20:]
+            peers: list[PeerInfo] = []
+            for i in range(0, len(peer_data) - 5, 6):
+                chunk = peer_data[i : i + 6]
+                ip = f"{chunk[0]}.{chunk[1]}.{chunk[2]}.{chunk[3]}"
+                port_val = struct.unpack(">H", chunk[4:6])[0]
+                peers.append(
+                    PeerInfo(peer_id=b"", addresses=[f"{ip}:{port_val}"])
+                )
+            return peers
+        except Exception:
+            return []
+        finally:
+            sock.close()
 
 
 # ---------------------------------------------------------------------------
