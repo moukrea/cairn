@@ -302,10 +302,7 @@ impl ApiNode {
                         .await
                     {
                         Ok(()) => {
-                            tracing::info!(
-                                count = addrs.len(),
-                                "DHT: published listen addresses"
-                            );
+                            tracing::info!(count = addrs.len(), "DHT: published listen addresses");
                         }
                         Err(e) => {
                             tracing::warn!(%e, "DHT: failed to publish addresses");
@@ -341,10 +338,7 @@ impl ApiNode {
                         let _ = dht_sender
                             .kad_put_record(peer_id_bytes.clone(), addrs_value)
                             .await;
-                        tracing::debug!(
-                            count = all_addrs.len(),
-                            "DHT: re-published addresses"
-                        );
+                        tracing::debug!(count = all_addrs.len(), "DHT: re-published addresses");
                     }
                 }
             });
@@ -361,9 +355,8 @@ impl ApiNode {
 
         // In-progress inbound handshakes, keyed by remote libp2p PeerId string.
         // Stores the Noise responder state and the DH keypair between rounds.
-        let inbound_handshakes: Arc<
-            RwLock<HashMap<String, (NoiseXXHandshake, X25519Keypair)>>,
-        > = Arc::new(RwLock::new(HashMap::new()));
+        let inbound_handshakes: Arc<RwLock<HashMap<String, (NoiseXXHandshake, X25519Keypair)>>> =
+            Arc::new(RwLock::new(HashMap::new()));
 
         // Nonce cache for SESSION_RESUME replay protection.
         let nonce_cache: Arc<tokio::sync::Mutex<NonceCache>> =
@@ -405,13 +398,12 @@ impl ApiNode {
                             let sessions_clone = sessions.clone();
                             let event_tx_clone = event_tx.clone();
                             tokio::spawn(async move {
-                                let mut backoff = reconnection::BackoffState::new(
-                                    reconnection::BackoffConfig {
+                                let mut backoff =
+                                    reconnection::BackoffState::new(reconnection::BackoffConfig {
                                         initial_delay: std::time::Duration::from_secs(1),
                                         max_delay: std::time::Duration::from_secs(30),
                                         factor: 2.0,
-                                    },
-                                );
+                                    });
 
                                 for _ in 0..MAX_RECONNECT_RETRIES {
                                     let delay = backoff.next_delay();
@@ -438,7 +430,9 @@ impl ApiNode {
                                             &saved.ratchet_state,
                                             RatchetConfig::default(),
                                         ) {
-                                            if let Ok(resumption_key) = ratchet.derive_resumption_key() {
+                                            if let Ok(resumption_key) =
+                                                ratchet.derive_resumption_key()
+                                            {
                                                 let mut nonce = [0u8; 32];
                                                 rand::RngCore::fill_bytes(
                                                     &mut rand::thread_rng(),
@@ -474,9 +468,8 @@ impl ApiNode {
                                                         msg_id: new_msg_id(),
                                                         session_id: Some({
                                                             let mut arr = [0u8; 32];
-                                                            arr[..16].copy_from_slice(
-                                                                &saved.session_id,
-                                                            );
+                                                            arr[..16]
+                                                                .copy_from_slice(&saved.session_id);
                                                             arr
                                                         }),
                                                         payload: resume_payload,
@@ -524,12 +517,9 @@ impl ApiNode {
                         let envelope = MessageEnvelope::decode(&request);
 
                         match envelope {
-                            Ok(env)
-                                if env.msg_type == message_types::HANDSHAKE_INIT =>
-                            {
+                            Ok(env) if env.msg_type == message_types::HANDSHAKE_INIT => {
                                 // --- Inbound handshake round 1 ---
-                                let identity =
-                                    IdentityKeypair::from_bytes(&identity_secret);
+                                let identity = IdentityKeypair::from_bytes(&identity_secret);
                                 let mut responder =
                                     NoiseXXHandshake::new(Role::Responder, identity);
 
@@ -537,9 +527,8 @@ impl ApiNode {
                                     Ok(StepOutput::SendMessage(m)) => m,
                                     _ => {
                                         // Handshake failed — send empty error response
-                                        let _ = sender_for_loop
-                                            .send_response(request_id, vec![])
-                                            .await;
+                                        let _ =
+                                            sender_for_loop.send_response(request_id, vec![]).await;
                                         continue;
                                     }
                                 };
@@ -559,9 +548,7 @@ impl ApiNode {
                                     auth_tag: Some(dh_pub),
                                 };
                                 if let Ok(bytes) = response_env.encode() {
-                                    let _ = sender_for_loop
-                                        .send_response(request_id, bytes)
-                                        .await;
+                                    let _ = sender_for_loop.send_response(request_id, bytes).await;
                                 }
 
                                 // Store handshake state for round 2
@@ -570,26 +557,20 @@ impl ApiNode {
                                     .await
                                     .insert(peer_str, (responder, dh_kp));
                             }
-                            Ok(env)
-                                if env.msg_type == message_types::HANDSHAKE_FINISH =>
-                            {
+                            Ok(env) if env.msg_type == message_types::HANDSHAKE_FINISH => {
                                 // --- Inbound handshake round 2 ---
-                                let hs_entry = inbound_handshakes
-                                    .write()
-                                    .await
-                                    .remove(&peer_str);
+                                let hs_entry = inbound_handshakes.write().await.remove(&peer_str);
 
                                 if let Some((mut responder, dh_kp)) = hs_entry {
                                     match responder.step(Some(&env.payload)) {
                                         Ok(StepOutput::Complete(hs_result)) => {
                                             // Handshake complete — create session
                                             {
-                                                let ratchet_result =
-                                                    DoubleRatchet::init_responder(
-                                                        hs_result.session_key,
-                                                        dh_kp,
-                                                        RatchetConfig::default(),
-                                                    );
+                                                let ratchet_result = DoubleRatchet::init_responder(
+                                                    hs_result.session_key,
+                                                    dh_kp,
+                                                    RatchetConfig::default(),
+                                                );
                                                 if let Ok(ratchet) = ratchet_result {
                                                     let session_id = SessionId::new();
 
@@ -604,49 +585,41 @@ impl ApiNode {
                                                         created_at: unix_timestamp_secs(),
                                                         last_activity: unix_timestamp_secs(),
                                                         remote_addrs: vec![],
-                                                        expiry_secs: persistence::DEFAULT_EXPIRY_SECS,
+                                                        expiry_secs:
+                                                            persistence::DEFAULT_EXPIRY_SECS,
                                                     };
-                                                    saved_sessions.write().await.insert(
-                                                        peer_str.clone(),
-                                                        saved.clone(),
-                                                    );
+                                                    saved_sessions
+                                                        .write()
+                                                        .await
+                                                        .insert(peer_str.clone(), saved.clone());
                                                     let _ = persistence::save_session(
                                                         keystore.as_ref(),
                                                         &saved,
-                                                    ).await;
+                                                    )
+                                                    .await;
 
-                                                    let (sm, _) =
-                                                        SessionStateMachine::new(
-                                                            session_id,
-                                                            SessionState::Connected,
-                                                        );
-                                                    let session =
-                                                        ApiSession::with_crypto(
-                                                            peer_str.clone(),
-                                                            event_tx.clone(),
-                                                            Some(Arc::new(
-                                                                RwLock::new(ratchet),
-                                                            )),
-                                                            Some(Arc::new(
-                                                                RwLock::new(sm),
-                                                            )),
-                                                        )
-                                                        .with_session_id(session_id)
-                                                        .with_swarm(
-                                                            sender_for_loop.clone(),
-                                                            peer_id,
-                                                        );
-
-                                                    sessions.write().await.insert(
-                                                        peer_str.clone(),
-                                                        session,
+                                                    let (sm, _) = SessionStateMachine::new(
+                                                        session_id,
+                                                        SessionState::Connected,
                                                     );
+                                                    let session = ApiSession::with_crypto(
+                                                        peer_str.clone(),
+                                                        event_tx.clone(),
+                                                        Some(Arc::new(RwLock::new(ratchet))),
+                                                        Some(Arc::new(RwLock::new(sm))),
+                                                    )
+                                                    .with_session_id(session_id)
+                                                    .with_swarm(sender_for_loop.clone(), peer_id);
+
+                                                    sessions
+                                                        .write()
+                                                        .await
+                                                        .insert(peer_str.clone(), session);
 
                                                     // Send ACK
                                                     let ack = MessageEnvelope {
                                                         version: 1,
-                                                        msg_type:
-                                                            message_types::HANDSHAKE_ACK,
+                                                        msg_type: message_types::HANDSHAKE_ACK,
                                                         msg_id: new_msg_id(),
                                                         session_id: None,
                                                         payload: vec![],
@@ -654,17 +627,14 @@ impl ApiNode {
                                                     };
                                                     if let Ok(bytes) = ack.encode() {
                                                         let _ = sender_for_loop
-                                                            .send_response(
-                                                                request_id, bytes,
-                                                            )
+                                                            .send_response(request_id, bytes)
                                                             .await;
                                                     }
 
                                                     let _ = event_tx
                                                         .send(Event::StateChanged {
                                                             peer_id: peer_str,
-                                                            state:
-                                                                ConnectionState::Connected,
+                                                            state: ConnectionState::Connected,
                                                         })
                                                         .await;
                                                 }
@@ -678,14 +648,10 @@ impl ApiNode {
                                     }
                                 } else {
                                     // No pending handshake for this peer
-                                    let _ = sender_for_loop
-                                        .send_response(request_id, vec![])
-                                        .await;
+                                    let _ = sender_for_loop.send_response(request_id, vec![]).await;
                                 }
                             }
-                            Ok(env)
-                                if env.msg_type == message_types::SESSION_RESUME =>
-                            {
+                            Ok(env) if env.msg_type == message_types::SESSION_RESUME => {
                                 // --- Inbound SESSION_RESUME ---
                                 // Decode the resume payload.
                                 let decoded = reconnection::decode_session_resume(&env.payload);
@@ -723,7 +689,9 @@ impl ApiNode {
                                 // Helper: send a SESSION_EXPIRED rejection.
                                 macro_rules! send_session_expired {
                                     ($reason:expr) => {
-                                        if let Ok(payload) = reconnection::encode_session_expired($reason) {
+                                        if let Ok(payload) =
+                                            reconnection::encode_session_expired($reason)
+                                        {
                                             let resp = MessageEnvelope {
                                                 version: 1,
                                                 msg_type: message_types::SESSION_EXPIRED,
@@ -744,7 +712,9 @@ impl ApiNode {
                                 let saved = match saved_opt {
                                     Some(s) => s,
                                     None => {
-                                        send_session_expired!(reconnection::ExpiredReason::NotFound);
+                                        send_session_expired!(
+                                            reconnection::ExpiredReason::NotFound
+                                        );
                                         continue;
                                     }
                                 };
@@ -758,9 +728,9 @@ impl ApiNode {
                                 // Check expiry
                                 if saved.is_expired() {
                                     saved_sessions.write().await.remove(&peer_str);
-                                    let _ = persistence::delete_session(
-                                        keystore.as_ref(), &peer_str,
-                                    ).await;
+                                    let _ =
+                                        persistence::delete_session(keystore.as_ref(), &peer_str)
+                                            .await;
                                     send_session_expired!(reconnection::ExpiredReason::Expired);
                                     continue;
                                 }
@@ -782,14 +752,18 @@ impl ApiNode {
                                 let ratchet = match ratchet_result {
                                     Ok(r) => r,
                                     Err(_) => {
-                                        send_session_expired!(reconnection::ExpiredReason::InvalidProof);
+                                        send_session_expired!(
+                                            reconnection::ExpiredReason::InvalidProof
+                                        );
                                         continue;
                                     }
                                 };
                                 let resumption_key = match ratchet.derive_resumption_key() {
                                     Ok(k) => k,
                                     Err(_) => {
-                                        send_session_expired!(reconnection::ExpiredReason::InvalidProof);
+                                        send_session_expired!(
+                                            reconnection::ExpiredReason::InvalidProof
+                                        );
                                         continue;
                                     }
                                 };
@@ -799,18 +773,17 @@ impl ApiNode {
                                     &session_id_bytes,
                                     &proof,
                                 ) {
-                                    send_session_expired!(reconnection::ExpiredReason::InvalidProof);
+                                    send_session_expired!(
+                                        reconnection::ExpiredReason::InvalidProof
+                                    );
                                     continue;
                                 }
 
                                 // Proof valid — create session with restored ratchet.
-                                let session_id = SessionId::from_uuid(
-                                    uuid::Uuid::from_bytes(session_id_bytes),
-                                );
-                                let (sm, _) = SessionStateMachine::new(
-                                    session_id,
-                                    SessionState::Connected,
-                                );
+                                let session_id =
+                                    SessionId::from_uuid(uuid::Uuid::from_bytes(session_id_bytes));
+                                let (sm, _) =
+                                    SessionStateMachine::new(session_id, SessionState::Connected);
                                 let session = ApiSession::with_crypto(
                                     peer_str.clone(),
                                     event_tx.clone(),
@@ -820,28 +793,24 @@ impl ApiNode {
                                 .with_session_id(session_id)
                                 .with_swarm(sender_for_loop.clone(), peer_id);
 
-                                sessions.write().await.insert(
-                                    peer_str.clone(),
-                                    session,
-                                );
+                                sessions.write().await.insert(peer_str.clone(), session);
 
                                 // Update last_activity on the saved session
                                 {
                                     let mut updated = saved.clone();
                                     updated.last_activity = unix_timestamp_secs();
-                                    saved_sessions.write().await.insert(
-                                        peer_str.clone(),
-                                        updated.clone(),
-                                    );
-                                    let _ = persistence::save_session(
-                                        keystore.as_ref(), &updated,
-                                    ).await;
+                                    saved_sessions
+                                        .write()
+                                        .await
+                                        .insert(peer_str.clone(), updated.clone());
+                                    let _ = persistence::save_session(keystore.as_ref(), &updated)
+                                        .await;
                                 }
 
                                 // Send SESSION_RESUME_ACK
-                                if let Ok(ack_payload) = reconnection::encode_session_resume_ack(
-                                    saved.sequence_rx,
-                                ) {
+                                if let Ok(ack_payload) =
+                                    reconnection::encode_session_resume_ack(saved.sequence_rx)
+                                {
                                     let ack = MessageEnvelope {
                                         version: 1,
                                         msg_type: message_types::SESSION_RESUME_ACK,
@@ -851,9 +820,8 @@ impl ApiNode {
                                         auth_tag: None,
                                     };
                                     if let Ok(bytes) = ack.encode() {
-                                        let _ = sender_for_loop
-                                            .send_response(request_id, bytes)
-                                            .await;
+                                        let _ =
+                                            sender_for_loop.send_response(request_id, bytes).await;
                                     }
                                 }
 
@@ -868,10 +836,7 @@ impl ApiNode {
                                 // Regular data message — route to session
                                 let sessions_guard = sessions.read().await;
                                 if let Some(session) = sessions_guard.get(&peer_str) {
-                                    session
-                                        .dispatch_incoming(&request)
-                                        .await
-                                        .ok();
+                                    session.dispatch_incoming(&request).await.ok();
                                 } else {
                                     let _ = event_tx
                                         .send(Event::MessageReceived {
@@ -891,8 +856,7 @@ impl ApiNode {
 
                         // Check if there's a pending handshake waiter for this peer
                         // (connect_transport() on the initiator side).
-                        let waiter =
-                            response_waiters.write().await.remove(&peer_str);
+                        let waiter = response_waiters.write().await.remove(&peer_str);
                         if let Some(tx) = waiter {
                             let _ = tx.send(response);
                         } else {
@@ -995,7 +959,7 @@ impl ApiNode {
                 let is_useful = |a: &&String| -> bool {
                     !a.contains("/127.0.0.1/") // skip loopback
                         && !a.contains("/172.") // skip Docker bridges
-                        && !a.contains("/10.")  // skip private class A
+                        && !a.contains("/10.") // skip private class A
                 };
                 // Collect WS addresses first (browser-compatible), then TCP
                 let mut selected: Vec<&String> = addrs
@@ -1016,7 +980,9 @@ impl ApiNode {
                 if selected.is_empty() {
                     selected = addrs
                         .iter()
-                        .filter(|a| a.contains("/ws") || (a.contains("/tcp/") && !a.contains("/quic")))
+                        .filter(|a| {
+                            a.contains("/ws") || (a.contains("/tcp/") && !a.contains("/quic"))
+                        })
                         .filter(|a| !a.contains("/127.0.0.1/"))
                         .take(4)
                         .collect();
@@ -1274,13 +1240,10 @@ impl ApiNode {
             .send_request(remote_pid, init_envelope.encode()?)
             .await?;
 
-        let response_bytes = tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            rx,
-        )
-        .await
-        .map_err(|_| CairnError::Transport("handshake timed out waiting for response".into()))?
-        .map_err(|_| CairnError::Transport("handshake response waiter dropped".into()))?;
+        let response_bytes = tokio::time::timeout(std::time::Duration::from_secs(30), rx)
+            .await
+            .map_err(|_| CairnError::Transport("handshake timed out waiting for response".into()))?
+            .map_err(|_| CairnError::Transport("handshake response waiter dropped".into()))?;
 
         let response_env = MessageEnvelope::decode(&response_bytes)?;
         if response_env.msg_type != message_types::HANDSHAKE_RESPONSE {
@@ -1328,13 +1291,10 @@ impl ApiNode {
             .send_request(remote_pid, finish_envelope.encode()?)
             .await?;
 
-        let ack_bytes = tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            rx,
-        )
-        .await
-        .map_err(|_| CairnError::Transport("handshake timed out waiting for ACK".into()))?
-        .map_err(|_| CairnError::Transport("handshake ACK waiter dropped".into()))?;
+        let ack_bytes = tokio::time::timeout(std::time::Duration::from_secs(30), rx)
+            .await
+            .map_err(|_| CairnError::Transport("handshake timed out waiting for ACK".into()))?
+            .map_err(|_| CairnError::Transport("handshake ACK waiter dropped".into()))?;
 
         let ack_env = MessageEnvelope::decode(&ack_bytes)?;
         if ack_env.msg_type != message_types::HANDSHAKE_ACK {
@@ -1375,8 +1335,7 @@ impl ApiNode {
         // Persist to keystore (best-effort, don't fail the connection)
         let _ = persistence::save_session(self.keystore.as_ref(), &saved).await;
 
-        let (state_machine, _) =
-            SessionStateMachine::new(session_id, SessionState::Connected);
+        let (state_machine, _) = SessionStateMachine::new(session_id, SessionState::Connected);
         let session = ApiSession::with_crypto(
             remote_str.clone(),
             self.event_tx.clone(),
@@ -1411,10 +1370,7 @@ impl ApiNode {
     /// the remote peer rejects the resume attempt.
     ///
     /// Requires `start_transport()` to have been called first.
-    pub async fn try_resume_transport(
-        &self,
-        saved: &SavedSession,
-    ) -> Result<ApiSession> {
+    pub async fn try_resume_transport(&self, saved: &SavedSession) -> Result<ApiSession> {
         let sender = self
             .swarm_sender
             .as_ref()
@@ -1438,10 +1394,7 @@ impl ApiNode {
         }
 
         // Restore the DoubleRatchet from saved state.
-        let ratchet = DoubleRatchet::import_state(
-            &saved.ratchet_state,
-            RatchetConfig::default(),
-        )?;
+        let ratchet = DoubleRatchet::import_state(&saved.ratchet_state, RatchetConfig::default())?;
 
         // Derive the resumption key and generate the proof.
         let resumption_key = ratchet.derive_resumption_key()?;
@@ -1456,11 +1409,8 @@ impl ApiNode {
         );
 
         // Build and send the SESSION_RESUME envelope.
-        let resume_payload = reconnection::encode_session_resume(
-            &saved.session_id,
-            &proof,
-            saved.sequence_rx,
-        )?;
+        let resume_payload =
+            reconnection::encode_session_resume(&saved.session_id, &proof, saved.sequence_rx)?;
         let resume_envelope = MessageEnvelope {
             version: 1,
             msg_type: message_types::SESSION_RESUME,
@@ -1485,13 +1435,10 @@ impl ApiNode {
             .await?;
 
         // Wait for response (SESSION_RESUME_ACK or SESSION_EXPIRED).
-        let response_bytes = tokio::time::timeout(
-            std::time::Duration::from_secs(15),
-            rx,
-        )
-        .await
-        .map_err(|_| CairnError::Transport("session resume timed out".into()))?
-        .map_err(|_| CairnError::Transport("session resume waiter dropped".into()))?;
+        let response_bytes = tokio::time::timeout(std::time::Duration::from_secs(15), rx)
+            .await
+            .map_err(|_| CairnError::Transport("session resume timed out".into()))?
+            .map_err(|_| CairnError::Transport("session resume waiter dropped".into()))?;
 
         let response_env = MessageEnvelope::decode(&response_bytes)?;
 
@@ -1538,15 +1485,8 @@ impl ApiNode {
                 let reason = reconnection::decode_session_expired(&response_env.payload)
                     .unwrap_or(reconnection::ExpiredReason::Expired);
                 // Remove the stale saved session.
-                self.saved_sessions
-                    .write()
-                    .await
-                    .remove(&remote_str);
-                let _ = persistence::delete_session(
-                    self.keystore.as_ref(),
-                    &remote_str,
-                )
-                .await;
+                self.saved_sessions.write().await.remove(&remote_str);
+                let _ = persistence::delete_session(self.keystore.as_ref(), &remote_str).await;
                 Err(CairnError::Protocol(format!(
                     "session resume rejected: {reason}"
                 )))

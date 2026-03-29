@@ -2,7 +2,6 @@
 
 use cairn_p2p::create_and_start;
 
-
 #[tokio::test]
 async fn node_starts_transport_and_listens() {
     let node = create_and_start().await.unwrap();
@@ -98,20 +97,20 @@ async fn two_nodes_exchange_messages_over_transport() {
         .expect("send should succeed");
 
     // Node A should receive the message via its event channel.
-    let a_received = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        async {
-            loop {
-                if let Some(Event::MessageReceived { data, .. }) = node_a.recv_event().await {
-                    return data;
-                }
+    let a_received = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            if let Some(Event::MessageReceived { data, .. }) = node_a.recv_event().await {
+                return data;
             }
-        },
-    )
+        }
+    })
     .await
     .expect("A should receive message within 5 seconds");
 
-    assert_eq!(a_received, b"hello from B", "B→A message content should match");
+    assert_eq!(
+        a_received, b"hello from B",
+        "B→A message content should match"
+    );
 
     // --- A → B (bidirectional) ---
     // Node A's session was auto-created during the handshake, keyed by B's libp2p PeerId.
@@ -134,6 +133,8 @@ async fn two_nodes_exchange_messages_over_transport() {
     .await
     .expect("B should receive message within 5 seconds");
 
-    assert_eq!(b_received, b"hello from A", "A→B message content should match");
+    assert_eq!(
+        b_received, b"hello from A",
+        "A→B message content should match"
+    );
 }
-

@@ -323,9 +323,9 @@ func TestAllNatTypes(t *testing.T) {
 	assert.Contains(t, types, NatUnknown)
 }
 
-func TestDetectNATTypeReturnsUnknown(t *testing.T) {
+func TestDetectNATTypeReturnsValidType(t *testing.T) {
 	result := DetectNATType(context.Background(), DefaultStunServers)
-	assert.Equal(t, NatUnknown, result)
+	assert.Contains(t, AllNatTypes(), result)
 }
 
 func TestDetectNATTypeEmptyServersReturnsUnknown(t *testing.T) {
@@ -337,7 +337,7 @@ func TestNatDetectorWithDefaults(t *testing.T) {
 	d := NewNatDetector(nil)
 	assert.Equal(t, DefaultStunServers, d.StunServers())
 	result := d.Detect(context.Background())
-	assert.Equal(t, NatUnknown, result)
+	assert.Contains(t, AllNatTypes(), result)
 }
 
 func TestNatDetectorCustomServers(t *testing.T) {

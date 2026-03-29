@@ -112,7 +112,7 @@ export interface SavedSessionState {
 }
 
 /** Maximum age of a saved session before it is considered expired (5 minutes). */
-const SESSION_RESUME_MAX_AGE_MS = 5 * 60 * 1000;
+const _SESSION_RESUME_MAX_AGE_MS = 5 * 60 * 1000;
 
 /** Maximum allowed clock skew for resume timestamps (5 minutes). */
 const SESSION_RESUME_TIMESTAMP_WINDOW_SEC = 5 * 60;
@@ -1360,7 +1360,7 @@ export class Node {
       const payloadMap = cborDecode(requestEnv.payload, { useMaps: true }) as Map<string, unknown>;
       const sessionId = payloadMap.get('session_id') as Uint8Array;
       const proof = payloadMap.get('proof') as Uint8Array;
-      const lastRxSequence = (payloadMap.get('last_rx_sequence') ?? 0) as number;
+      const _lastRxSequence = (payloadMap.get('last_rx_sequence') ?? 0) as number;
       const nonce = payloadMap.get('nonce') as Uint8Array;
       const timestamp = payloadMap.get('timestamp') as number;
 

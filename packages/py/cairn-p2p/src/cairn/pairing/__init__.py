@@ -1,4 +1,4 @@
-"""Pairing mechanisms: QR, PIN, link, PSK, SAS, state machine, adapter, rate limiting."""
+"""Pairing: QR, PIN, link, PSK, SAS, state machine, adapter, rate limiting."""
 
 from cairn.pairing.adapter import PairingAdapter
 from cairn.pairing.link import pair_from_link, pair_generate_link
@@ -41,13 +41,13 @@ from cairn.pairing.sas import (
 from cairn.pairing.state_machine import (
     DEFAULT_PAIRING_TIMEOUT,
     InvalidTransitionError,
-    PairRejectReason,
     PairingError,
     PairingFlowType,
     PairingRole,
     PairingSession,
     PairingState,
     PairingTimeoutError,
+    PairRejectReason,
     PakeFailureError,
     RejectedError,
 )

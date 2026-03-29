@@ -223,8 +223,9 @@ def _default_data_dir() -> Path:
     """Return the platform-appropriate default data directory for cairn keys.
 
     Uses ``$CAIRN_DATA_DIR`` if set, otherwise ``$XDG_DATA_HOME/cairn``
-    (defaults to ``~/.local/share/cairn`` on Linux, ``~/Library/Application Support/cairn``
-    on macOS, ``%APPDATA%/cairn`` on Windows).
+    (defaults to ``~/.local/share/cairn`` on Linux,
+    ``~/Library/Application Support/cairn`` on macOS,
+    ``%APPDATA%/cairn`` on Windows).
     """
     env_dir = os.environ.get("CAIRN_DATA_DIR")
     if env_dir:

@@ -374,7 +374,9 @@ class PairingSession:
 
     # ---- Key confirmation -------------------------------------------------
 
-    def send_key_confirmation(self, local_peer_id: bytes | None = None) -> PairingMessage:
+    def send_key_confirmation(
+        self, local_peer_id: bytes | None = None,
+    ) -> PairingMessage:
         """Produce a key confirmation message and advance to AwaitingConfirmation.
 
         Call this when the local side is ready to confirm the pairing (e.g.

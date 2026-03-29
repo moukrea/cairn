@@ -662,14 +662,14 @@ async fn build_swarm_inner(
 
             // Kademlia DHT with bootstrap nodes for internet-wide peer discovery.
             let store = libp2p::kad::store::MemoryStore::new(peer_id);
-            let mut kad_config = libp2p::kad::Config::new(
-                libp2p::StreamProtocol::new("/ipfs/kad/1.0.0"),
-            );
+            let mut kad_config =
+                libp2p::kad::Config::new(libp2p::StreamProtocol::new("/ipfs/kad/1.0.0"));
             // Set a reasonable record TTL (24 hours) and provider record TTL.
             kad_config.set_record_ttl(Some(std::time::Duration::from_secs(86400)));
             kad_config.set_provider_record_ttl(Some(std::time::Duration::from_secs(86400)));
             // Re-publish provider records periodically (every 12 hours).
-            kad_config.set_provider_publication_interval(Some(std::time::Duration::from_secs(43200)));
+            kad_config
+                .set_provider_publication_interval(Some(std::time::Duration::from_secs(43200)));
             let mut kademlia = libp2p::kad::Behaviour::with_config(peer_id, store, kad_config);
             // Set mode to Server so this node participates fully in the DHT
             // (stores and serves records for other peers).
@@ -677,7 +677,10 @@ async fn build_swarm_inner(
 
             // Add bootstrap nodes (either from config or defaults).
             let bootstrap_addrs: Vec<String> = if config.bootstrap_nodes.is_empty() {
-                DEFAULT_BOOTSTRAP_NODES.iter().map(|s| s.to_string()).collect()
+                DEFAULT_BOOTSTRAP_NODES
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect()
             } else {
                 config.bootstrap_nodes.clone()
             };
@@ -714,19 +717,14 @@ async fn build_swarm_inner(
             // Identify -- peers exchange observed addresses on connect.
             // This is how a node behind NAT learns its public address.
             let identify = libp2p::identify::Behaviour::new(
-                libp2p::identify::Config::new(
-                    "/cairn/1.0.0".into(),
-                    key.public(),
-                )
-                .with_push_listen_addr_updates(true),
+                libp2p::identify::Config::new("/cairn/1.0.0".into(), key.public())
+                    .with_push_listen_addr_updates(true),
             );
 
             // AutoNAT -- probe whether we are publicly reachable.
             // Uses connected peers to dial us back and determine NAT status.
-            let autonat = libp2p::autonat::Behaviour::new(
-                peer_id,
-                libp2p::autonat::Config::default(),
-            );
+            let autonat =
+                libp2p::autonat::Behaviour::new(peer_id, libp2p::autonat::Config::default());
 
             // DCUtR -- Direct Connection Upgrade through Relay.
             // When two peers are connected via a relay, DCUtR coordinates
@@ -1408,18 +1406,20 @@ mod tests {
 
     #[test]
     fn extract_peer_id_from_multiaddr() {
-        let addr: Multiaddr = "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"
-            .parse()
-            .unwrap();
+        let addr: Multiaddr =
+            "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"
+                .parse()
+                .unwrap();
         let peer_id = extract_peer_id(&addr);
         assert!(peer_id.is_some(), "should extract peer ID from multiaddr");
     }
 
     #[test]
     fn strip_peer_id_from_multiaddr() {
-        let addr: Multiaddr = "/ip4/1.2.3.4/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"
-            .parse()
-            .unwrap();
+        let addr: Multiaddr =
+            "/ip4/1.2.3.4/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"
+                .parse()
+                .unwrap();
         let stripped = strip_peer_id(&addr);
         let stripped_str = stripped.to_string();
         assert!(
@@ -1435,7 +1435,9 @@ mod tests {
     #[test]
     fn default_bootstrap_nodes_parse() {
         for addr_str in DEFAULT_BOOTSTRAP_NODES {
-            let ma: Multiaddr = addr_str.parse().expect("default bootstrap node should parse");
+            let ma: Multiaddr = addr_str
+                .parse()
+                .expect("default bootstrap node should parse");
             assert!(
                 extract_peer_id(&ma).is_some(),
                 "bootstrap node should contain a peer ID: {addr_str}"
