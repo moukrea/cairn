@@ -51,6 +51,11 @@ parameters:
 			path: src/Crypto/Spake2.php
 
 		-
+			message: "#^Property Cairn\\\\Crypto\\\\Spake2\\:\\:\\$passwordScalar \\(string\\) does not accept null\\.$#"
+			count: 1
+			path: src/Crypto/Spake2.php
+
+		-
 			message: "#^Property Cairn\\\\Crypto\\\\Spake2\\:\\:\\$scalar \\(string\\) does not accept null\\.$#"
 			count: 1
 			path: src/Crypto/Spake2.php
