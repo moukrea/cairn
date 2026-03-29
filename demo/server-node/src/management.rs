@@ -3,7 +3,9 @@
 //! Wraps cairn-p2p's management module with server-node-specific endpoints
 //! and environment-based configuration.
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::extract::{Path, State};
 use axum::http::{header, Request, StatusCode};
@@ -11,6 +13,7 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use rand::Rng;
 use serde::Serialize;
 use subtle::ConstantTimeEq;
 use tokio::sync::RwLock;
@@ -20,6 +23,22 @@ use crate::config::ServerConfig;
 // ---------------------------------------------------------------------------
 // Shared state
 // ---------------------------------------------------------------------------
+
+/// A pending pairing PIN with expiration.
+#[derive(Debug, Clone)]
+struct PendingPin {
+    pin: String,
+    created_at: Instant,
+    expires_in_secs: u64,
+}
+
+/// A pending pairing link with expiration.
+#[derive(Debug, Clone)]
+struct PendingLink {
+    uri: String,
+    created_at: Instant,
+    expires_in_secs: u64,
+}
 
 /// Shared application state for the management API.
 pub struct AppState {
@@ -35,6 +54,10 @@ pub struct AppState {
     pub queue_stats: RwLock<Vec<QueueEntry>>,
     /// Relay statistics
     pub relay_stats: RwLock<RelayStatsData>,
+    /// Pending pairing PINs (keyed by PIN string)
+    pub pending_pins: RwLock<HashMap<String, PendingPin>>,
+    /// Pending pairing links (keyed by nonce)
+    pub pending_links: RwLock<HashMap<String, PendingLink>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -66,6 +89,12 @@ pub struct PeerRelayEntry {
     pub active_streams: u32,
 }
 
+/// Default PIN expiration time (5 minutes).
+const PIN_EXPIRES_SECS: u64 = 300;
+
+/// Default pairing link expiration time (5 minutes).
+const LINK_EXPIRES_SECS: u64 = 300;
+
 impl AppState {
     pub fn new(config: ServerConfig) -> Self {
         Self {
@@ -75,8 +104,61 @@ impl AppState {
             peers: RwLock::new(Vec::new()),
             queue_stats: RwLock::new(Vec::new()),
             relay_stats: RwLock::new(RelayStatsData::default()),
+            pending_pins: RwLock::new(HashMap::new()),
+            pending_links: RwLock::new(HashMap::new()),
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Pairing helpers
+// ---------------------------------------------------------------------------
+
+/// Generate a random 8-digit PIN formatted as XXXX-XXXX.
+fn generate_pin() -> String {
+    let mut rng = rand::thread_rng();
+    let first: u32 = rng.gen_range(0..10000);
+    let second: u32 = rng.gen_range(0..10000);
+    format!("{:04}-{:04}", first, second)
+}
+
+/// Generate a random hex nonce for pairing links.
+fn generate_nonce() -> String {
+    let mut rng = rand::thread_rng();
+    let bytes: [u8; 16] = rng.gen();
+    hex::encode(&bytes)
+}
+
+/// Simple hex encoding (avoids adding the `hex` crate).
+mod hex {
+    pub fn encode(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    }
+}
+
+/// Build a cairn:// pairing link URI.
+///
+/// Format: cairn://pair/<nonce>?signal=<signal_server>&host=<hostname>
+/// The nonce is a random 32-hex-char string that identifies this pairing session.
+fn build_pairing_link(config: &ServerConfig, nonce: &str) -> String {
+    let mut uri = format!("cairn://pair/{nonce}");
+    let mut has_query = false;
+
+    // Append signal server if configured
+    if !config.signal_servers.is_empty() {
+        uri.push_str("?signal=");
+        uri.push_str(&config.signal_servers[0]);
+        has_query = true;
+    }
+
+    // Append hostname from the data dir or environment
+    let hostname = std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("CAIRN_HOSTNAME"))
+        .unwrap_or_else(|_| "cairn-server".to_string());
+    let sep = if has_query { "&" } else { "?" };
+    uri.push_str(&format!("{sep}host={hostname}"));
+
+    uri
 }
 
 // ---------------------------------------------------------------------------
@@ -248,34 +330,85 @@ async fn get_health(State(state): State<Arc<AppState>>) -> Json<HealthResponse> 
 
 /// POST /pairing/pin — generate a new pin code for headless pairing.
 async fn create_pairing_pin(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
 ) -> Json<PairingPinResponse> {
+    let pin = generate_pin();
+
+    // Store the pending PIN
+    let pending = PendingPin {
+        pin: pin.clone(),
+        created_at: Instant::now(),
+        expires_in_secs: PIN_EXPIRES_SECS,
+    };
+
+    {
+        let mut pins = state.pending_pins.write().await;
+        // Purge expired PINs first
+        pins.retain(|_, p| p.created_at.elapsed().as_secs() < p.expires_in_secs);
+        pins.insert(pin.clone(), pending);
+    }
+
     Json(PairingPinResponse {
-        pin: "0000-0000".to_string(), // Placeholder until headless pairing is wired
-        expires_in_secs: 300,
+        pin,
+        expires_in_secs: PIN_EXPIRES_SECS,
     })
 }
 
-/// GET /pairing/qr — generate QR code PNG for headless pairing.
+/// GET /pairing/qr — return a QR-encodable pairing link.
+///
+/// Returns the pairing link as a string that can be rendered into a QR code
+/// by the client. Does not generate an actual QR image server-side.
 async fn get_pairing_qr(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    // Placeholder: returns 503 until QR generation is wired
+    let nonce = generate_nonce();
+    let uri = build_pairing_link(&state.config, &nonce);
+
+    // Store as a pending link so it can be validated when the peer connects
+    let pending = PendingLink {
+        uri: uri.clone(),
+        created_at: Instant::now(),
+        expires_in_secs: LINK_EXPIRES_SECS,
+    };
+
+    {
+        let mut links = state.pending_links.write().await;
+        links.retain(|_, l| l.created_at.elapsed().as_secs() < l.expires_in_secs);
+        links.insert(nonce, pending);
+    }
+
     (
-        StatusCode::SERVICE_UNAVAILABLE,
+        StatusCode::OK,
         Json(serde_json::json!({
-            "error": "QR code generation not yet available"
+            "qr_data": uri,
+            "expires_in_secs": LINK_EXPIRES_SECS,
         })),
     )
 }
 
 /// POST /pairing/link — generate a pairing link URI.
 async fn create_pairing_link(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
 ) -> Json<PairingLinkResponse> {
+    let nonce = generate_nonce();
+    let uri = build_pairing_link(&state.config, &nonce);
+
+    // Store as a pending link
+    let pending = PendingLink {
+        uri: uri.clone(),
+        created_at: Instant::now(),
+        expires_in_secs: LINK_EXPIRES_SECS,
+    };
+
+    {
+        let mut links = state.pending_links.write().await;
+        links.retain(|_, l| l.created_at.elapsed().as_secs() < l.expires_in_secs);
+        links.insert(nonce, pending);
+    }
+
     Json(PairingLinkResponse {
-        uri: "cairn://pair?placeholder=true".to_string(), // Placeholder
-        expires_in_secs: 300,
+        uri,
+        expires_in_secs: LINK_EXPIRES_SECS,
     })
 }
 

@@ -19,6 +19,11 @@ export type {
 } from './manager.js';
 export { DiscoveryManager, InMemoryBackend } from './manager.js';
 
+export { MdnsBackend } from './mdns-backend.js';
+export { DhtBackend } from './dht-backend.js';
+export type { SignalingConfig } from './signaling-backend.js';
+export { SignalingBackend } from './signaling-backend.js';
+
 export type {
   TrackerProtocol,
   TrackerConfig,

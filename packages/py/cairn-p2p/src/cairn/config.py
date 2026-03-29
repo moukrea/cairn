@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cairn.crypto.storage import KeyStorage
 
 # ---------------------------------------------------------------------------
 # Default STUN servers
@@ -98,6 +102,7 @@ class CairnConfig:
     auto_approve_pairing: bool = False
     pairing_password: str | None = None
     pairing_message: str | None = None
+    key_storage: "KeyStorage | None" = None
 
     # --- Tier presets ---
 
