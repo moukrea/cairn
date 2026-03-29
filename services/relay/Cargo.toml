@@ -1,6 +1,6 @@
 [package]
 name = "cairn-relay"
-version = "0.2.0"
+version = "0.3.0"
 description = "TURN relay server for cairn P2P connectivity"
 edition.workspace = true
 license.workspace = true
