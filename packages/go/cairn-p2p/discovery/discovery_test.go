@@ -202,6 +202,28 @@ func TestDeriveRendezvousIDMatchesRust(t *testing.T) {
 	assert.Equal(t, expected, fmt.Sprintf("%x", id))
 }
 
+func TestDeriveRendezvousIDWithAppIsolation(t *testing.T) {
+	secret := []byte("shared-pairing-secret")
+	epoch := uint64(42)
+
+	// Default (no app ID) matches the standard derivation
+	idDefault, err := DeriveRendezvousIDWithApp(secret, epoch, "")
+	require.NoError(t, err)
+	idStandard, err := DeriveRendezvousID(secret, epoch)
+	require.NoError(t, err)
+	assert.Equal(t, idStandard, idDefault)
+
+	// Different app IDs produce different rendezvous IDs
+	idJaunt, err := DeriveRendezvousIDWithApp(secret, epoch, "jaunt")
+	require.NoError(t, err)
+	idChat, err := DeriveRendezvousIDWithApp(secret, epoch, "my-chat-app")
+	require.NoError(t, err)
+
+	assert.NotEqual(t, idDefault, idJaunt)
+	assert.NotEqual(t, idDefault, idChat)
+	assert.NotEqual(t, idJaunt, idChat)
+}
+
 // --- DiscoveryBackend interface compliance tests ---
 
 func TestMdnsImplementsBackend(t *testing.T) {

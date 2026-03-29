@@ -105,13 +105,24 @@ fn decode_crockford(input: &str) -> Result<[u8; 5], MechanismError> {
     Ok(result)
 }
 
-/// Format a pin code as `XXXX-XXXX`.
+/// Format a pin code as `XXXX-XXXX` (default format).
 pub fn format_pin(pin: &str) -> String {
-    if pin.len() == PIN_LENGTH {
-        format!("{}-{}", &pin[..4], &pin[4..])
-    } else {
-        pin.to_string()
+    format_pin_with(pin, 4, "-")
+}
+
+/// Format a pin code with custom group size and separator.
+pub fn format_pin_with(pin: &str, group_size: usize, separator: &str) -> String {
+    if group_size == 0 || pin.len() <= group_size {
+        return pin.to_string();
     }
+    let mut result = String::with_capacity(pin.len() + (pin.len() / group_size) * separator.len());
+    for (i, ch) in pin.chars().enumerate() {
+        if i > 0 && i % group_size == 0 {
+            result.push_str(separator);
+        }
+        result.push(ch);
+    }
+    result
 }
 
 /// Normalize a pin code input: uppercase, strip separators, apply Crockford substitutions.

@@ -19,6 +19,33 @@ type Config struct {
 
 	// Event channel buffer capacity (default: 256).
 	EventBufferSize int
+
+	// AppIdentifier is an optional application namespace for discovery isolation.
+	// Different app identifiers produce different rendezvous IDs from the same
+	// pairing secret, preventing cross-app peer collision on public networks.
+	AppIdentifier string
+
+	// PinFormat configures the pairing PIN code format.
+	PinFormat PinFormatConfig
+}
+
+// PinFormatConfig configures PIN code generation format.
+type PinFormatConfig struct {
+	// Length is the number of Crockford Base32 characters. Default: 8.
+	Length int
+	// GroupSize is the number of characters per group. Default: 4.
+	GroupSize int
+	// Separator is the character(s) between groups. Default: "-".
+	Separator string
+}
+
+// DefaultPinFormat returns the default PIN format (XXXX-XXXX).
+func DefaultPinFormat() PinFormatConfig {
+	return PinFormatConfig{
+		Length:    8,
+		GroupSize: 4,
+		Separator: "-",
+	}
 }
 
 // TurnServerConfig holds TURN relay server configuration.

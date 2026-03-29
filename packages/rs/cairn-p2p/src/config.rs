@@ -231,6 +231,34 @@ pub struct CairnConfig {
     pub storage_backend: StorageBackend,
     pub server_mode: bool,
     pub manifest_config: Option<ManifestConfig>,
+    /// Optional application identifier for discovery namespace isolation.
+    /// Different app identifiers produce different rendezvous IDs from the
+    /// same pairing secret, preventing cross-app peer collision on public
+    /// DHT/tracker networks.
+    pub app_identifier: Option<String>,
+    /// Customizable PIN format for pairing codes.
+    pub pin_format: PinFormat,
+}
+
+/// PIN format configuration.
+#[derive(Debug, Clone)]
+pub struct PinFormat {
+    /// Number of Crockford Base32 characters in the PIN. Default: 8.
+    pub length: usize,
+    /// Number of characters per group. Default: 4.
+    pub group_size: usize,
+    /// Separator between groups. Default: "-".
+    pub separator: String,
+}
+
+impl Default for PinFormat {
+    fn default() -> Self {
+        Self {
+            length: 8,
+            group_size: 4,
+            separator: "-".into(),
+        }
+    }
 }
 
 /// Default STUN servers (Google, Cloudflare).
@@ -267,6 +295,8 @@ impl Default for CairnConfig {
             storage_backend: StorageBackend::default(),
             server_mode: false,
             manifest_config: None,
+            app_identifier: None,
+            pin_format: PinFormat::default(),
         }
     }
 }

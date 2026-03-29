@@ -39,9 +39,29 @@ func DefaultRotationConfig() RotationConfig {
 // Uses HKDF-SHA256 with epoch as salt and "cairn-rendezvous-v1" as info.
 // Wire-compatible with Rust's derive_rendezvous_id.
 func DeriveRendezvousID(pairingSecret []byte, epoch uint64) ([]byte, error) {
+	return DeriveRendezvousIDWithApp(pairingSecret, epoch, "")
+}
+
+// DeriveRendezvousIDWithApp derives a rendezvous ID with an optional app identifier
+// for namespace isolation. Different app identifiers produce different IDs.
+func DeriveRendezvousIDWithApp(pairingSecret []byte, epoch uint64, appIdentifier string) ([]byte, error) {
 	salt := make([]byte, 8)
 	binary.BigEndian.PutUint64(salt, epoch)
-	return crypto.HkdfSHA256(pairingSecret, salt, crypto.HkdfInfoRendezvous, 32)
+	info := buildInfo(crypto.HkdfInfoRendezvous, appIdentifier)
+	return crypto.HkdfSHA256(pairingSecret, salt, info, 32)
+}
+
+// buildInfo appends an app identifier to the base HKDF info string.
+// Format: "base-info" or "base-info:{app_id}"
+func buildInfo(base []byte, appIdentifier string) []byte {
+	if appIdentifier == "" {
+		return base
+	}
+	info := make([]byte, 0, len(base)+1+len(appIdentifier))
+	info = append(info, base...)
+	info = append(info, ':')
+	info = append(info, []byte(appIdentifier)...)
+	return info
 }
 
 // DerivePairingRendezvousID derives a rendezvous ID for initial pairing bootstrap.

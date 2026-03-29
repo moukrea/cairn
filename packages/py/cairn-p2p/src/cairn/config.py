@@ -54,6 +54,15 @@ class MeshSettings:
     relay_capacity: int = 10
 
 
+@dataclass
+class PinFormat:
+    """PIN code format configuration."""
+
+    length: int = 8
+    group_size: int = 4
+    separator: str = "-"
+
+
 # ---------------------------------------------------------------------------
 # CairnConfig
 # ---------------------------------------------------------------------------
@@ -84,6 +93,8 @@ class CairnConfig:
         default_factory=MeshSettings
     )
     server_mode: bool = False
+    app_identifier: str | None = None
+    pin_format: "PinFormat" = field(default_factory=lambda: PinFormat())
 
     # --- Tier presets ---
 
