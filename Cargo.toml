@@ -1,5 +1,5 @@
 [workspace]
-members = ["packages/rs/cairn-p2p", "services/signaling", "services/relay", "conformance/runners/rust-runner"]
+members = ["packages/rs/cairn-p2p", "services/signaling", "services/relay", "services/bootstrap", "conformance/runners/rust-runner"]
 exclude = ["demo/messaging/rust", "demo/folder-sync/rust", "demo/server-node", "tools/gen-vectors", "tools/gen-vectors-extra"]
 resolver = "2"
 
