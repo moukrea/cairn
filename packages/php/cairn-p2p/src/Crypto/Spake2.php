@@ -50,6 +50,10 @@ final class Spake2
 
     private function __construct(SpakeRole $role, string $password)
     {
+        if (!function_exists('sodium_crypto_core_ed25519_scalar_random')) {
+            throw new CairnException('SPAKE2 requires libsodium >= 1.0.18 with Ed25519 support (PHP 8.1+)');
+        }
+
         $this->role = $role;
         $this->password = $password;
 
