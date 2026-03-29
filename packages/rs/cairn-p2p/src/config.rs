@@ -244,6 +244,12 @@ pub struct CairnConfig {
     pub pairing_password: Option<String>,
     /// Optional human-readable message attached to pairing requests.
     pub pairing_message: Option<String>,
+    /// Optional explicit listen addresses (multiaddr format).
+    /// When set, cairn listens only on these addresses instead of the default
+    /// `0.0.0.0` (all interfaces). Useful for skipping unwanted interfaces
+    /// (e.g., Docker bridges) that slow down startup.
+    /// Example: `["/ip4/192.168.1.10/tcp/0", "/ip4/192.168.1.10/udp/0/quic-v1"]`
+    pub listen_addresses: Option<Vec<String>>,
 }
 
 /// PIN format configuration.
@@ -306,6 +312,7 @@ impl Default for CairnConfig {
             auto_approve_pairing: false,
             pairing_password: None,
             pairing_message: None,
+            listen_addresses: None,
         }
     }
 }
@@ -478,6 +485,11 @@ impl CairnConfigBuilder {
 
     pub fn server_mode(mut self, enabled: bool) -> Self {
         self.config.server_mode = enabled;
+        self
+    }
+
+    pub fn listen_addresses(mut self, addrs: Vec<String>) -> Self {
+        self.config.listen_addresses = Some(addrs);
         self
     }
 
