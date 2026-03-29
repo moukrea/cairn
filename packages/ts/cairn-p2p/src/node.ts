@@ -885,15 +885,26 @@ export class Node {
     };
   }
 
-  async pairEnterPin(pin: string): Promise<string> {
+  async pairEnterPin(pin: string, remotePeerId?: string): Promise<string> {
     const normalized = normalizePin(pin);
     validatePin(normalized);
     const password = new TextEncoder().encode(normalized);
     this._runPairingExchange(password);
-    // In a real implementation, the remote peer ID would come from the pairing exchange
-    const remotePeerId = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
-    this._completePairing(remotePeerId);
-    return remotePeerId;
+
+    // Use the caller-provided remote peer ID (from a connection profile or
+    // DHT lookup), or attempt DHT discovery as a fallback.
+    let peerId = remotePeerId;
+    if (!peerId) {
+      peerId = (await this.lookupPinOnDht(normalized)) ?? undefined;
+    }
+    if (!peerId) {
+      throw new CairnError(
+        'PAIRING',
+        'Could not determine remote peer ID. Provide a connection profile or ensure DHT is reachable.',
+      );
+    }
+    this._completePairing(peerId);
+    return peerId;
   }
 
   async pairGenerateLink(): Promise<LinkPairingData> {
