@@ -652,10 +652,11 @@ async fn build_swarm_inner(
             let mdns_config = if config.mdns_enabled {
                 libp2p::mdns::Config::default()
             } else {
-                let mut c = libp2p::mdns::Config::default();
-                c.query_interval = std::time::Duration::from_secs(86400 * 365);
-                c.ttl = std::time::Duration::from_secs(1);
-                c
+                libp2p::mdns::Config {
+                    query_interval: std::time::Duration::from_secs(86400 * 365),
+                    ttl: std::time::Duration::from_secs(1),
+                    ..Default::default()
+                }
             };
             let mdns = libp2p::mdns::tokio::Behaviour::new(mdns_config, peer_id)
                 .map_err(|e| format!("mDNS init failed: {e}"))?;

@@ -869,8 +869,10 @@ mod tests {
 
     #[test]
     fn create_server_with_config_forces_server_mode() {
-        let mut cfg = CairnConfig::default();
-        cfg.server_mode = false;
+        let cfg = CairnConfig {
+            server_mode: false,
+            ..Default::default()
+        };
         let node = create_server_with_config(cfg).unwrap();
         assert!(node.config().server_mode);
     }

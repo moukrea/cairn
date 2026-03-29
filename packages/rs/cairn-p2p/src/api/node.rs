@@ -202,7 +202,6 @@ impl ApiNode {
         &mut self,
         transport_config: TransportConfig,
     ) -> Result<()> {
-        let transport_config = transport_config;
         let mut controller = build_swarm(&self.identity, &transport_config).await?;
 
         // Listen on enabled transports with ephemeral ports.

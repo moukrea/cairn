@@ -5,7 +5,7 @@ use cairn_p2p::pairing::mechanisms::{
     PairingLinkMechanism, PairingMechanism, PairingPayload, PinCodeMechanism, PskMechanism,
     QrCodeMechanism,
 };
-use cairn_p2p::{ApiNode, CairnConfig, StorageBackend};
+use cairn_p2p::{ApiNode, CairnConfig};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 fn test_payload() -> PairingPayload {
@@ -78,8 +78,8 @@ fn pairing_link_generate_and_consume_roundtrip() {
 #[test]
 fn psk_mechanism_validates_entropy() {
     let psk = PskMechanism::new();
-    assert!(psk.validate_entropy(&vec![0u8; 16]).is_ok());
-    assert!(psk.validate_entropy(&vec![0u8; 15]).is_err());
+    assert!(psk.validate_entropy(&[0u8; 16]).is_ok());
+    assert!(psk.validate_entropy(&[0u8; 15]).is_err());
 }
 
 #[test]

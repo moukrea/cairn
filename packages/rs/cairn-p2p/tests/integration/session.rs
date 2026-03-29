@@ -3,8 +3,10 @@
 use cairn_p2p::{ApiNode, CairnConfig, ConnectionState, Event, StorageBackend};
 
 fn test_node() -> ApiNode {
-    let mut config = CairnConfig::default();
-    config.storage_backend = StorageBackend::InMemory;
+    let config = CairnConfig {
+        storage_backend: StorageBackend::InMemory,
+        ..Default::default()
+    };
     ApiNode::new(config).unwrap()
 }
 

@@ -316,6 +316,105 @@ async fn run_rest_api(
     Ok(())
 }
 
+// --- TLS listener for WebSocket-over-TLS escape hatch ---
+
+async fn run_tls_listener(
+    addr: SocketAddr,
+    cert_path: &str,
+    key_path: &str,
+    state: Arc<RelayState>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use rustls::ServerConfig;
+    use std::io::BufReader;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio_rustls::TlsAcceptor;
+
+    // Load TLS certificate and key
+    let cert_file = std::fs::File::open(cert_path)
+        .map_err(|e| format!("failed to open TLS cert {cert_path}: {e}"))?;
+    let key_file = std::fs::File::open(key_path)
+        .map_err(|e| format!("failed to open TLS key {key_path}: {e}"))?;
+
+    let certs: Vec<rustls::pki_types::CertificateDer<'static>> =
+        rustls_pemfile::certs(&mut BufReader::new(cert_file))
+            .filter_map(|r| r.ok())
+            .collect();
+
+    let key = rustls_pemfile::private_key(&mut BufReader::new(key_file))
+        .map_err(|e| format!("failed to parse TLS key: {e}"))?
+        .ok_or("no private key found in key file")?;
+
+    let config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .map_err(|e| format!("TLS config error: {e}"))?;
+
+    let acceptor = TlsAcceptor::from(Arc::new(config));
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    info!(addr = %addr, "TLS listener started");
+
+    loop {
+        let (stream, peer_addr) = match listener.accept().await {
+            Ok(r) => r,
+            Err(e) => {
+                warn!(error = %e, "TLS accept error");
+                continue;
+            }
+        };
+
+        let acceptor = acceptor.clone();
+        let state = Arc::clone(&state);
+
+        tokio::spawn(async move {
+            let mut tls_stream = match acceptor.accept(stream).await {
+                Ok(s) => s,
+                Err(e) => {
+                    warn!(peer = %peer_addr, error = %e, "TLS handshake failed");
+                    return;
+                }
+            };
+
+            // Read TURN messages over TLS/TCP.
+            // TCP framing: each STUN message is preceded by a 2-byte length prefix (RFC 6062).
+            let mut len_buf = [0u8; 2];
+            while tls_stream.read_exact(&mut len_buf).await.is_ok() {
+                let msg_len = u16::from_be_bytes(len_buf) as usize;
+                if msg_len == 0 || msg_len > 65535 {
+                    break;
+                }
+
+                let mut msg_buf = vec![0u8; msg_len];
+                if tls_stream.read_exact(&mut msg_buf).await.is_err() {
+                    break;
+                }
+
+                // Check for ChannelData
+                if stun::is_channel_data(&msg_buf) {
+                    if let Some((channel, payload)) = stun::parse_channel_data(&msg_buf) {
+                        state.handle_channel_data(channel, payload, peer_addr).await;
+                    }
+                    continue;
+                }
+
+                let msg = match stun::Message::decode(&msg_buf) {
+                    Ok(m) => m,
+                    Err(_) => continue,
+                };
+
+                if let Some(response) = state.handle_stun_message(&msg, &msg_buf, peer_addr).await {
+                    let resp_len = (response.len() as u16).to_be_bytes();
+                    if tls_stream.write_all(&resp_len).await.is_err() {
+                        break;
+                    }
+                    if tls_stream.write_all(&response).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -448,104 +547,5 @@ mod tests {
         assert!(cred.get("password").is_some());
         assert_eq!(cred["ttl"], 600);
         assert!(cred["uris"].is_array());
-    }
-}
-
-// --- TLS listener for WebSocket-over-TLS escape hatch ---
-
-async fn run_tls_listener(
-    addr: SocketAddr,
-    cert_path: &str,
-    key_path: &str,
-    state: Arc<RelayState>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use rustls::ServerConfig;
-    use std::io::BufReader;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio_rustls::TlsAcceptor;
-
-    // Load TLS certificate and key
-    let cert_file = std::fs::File::open(cert_path)
-        .map_err(|e| format!("failed to open TLS cert {cert_path}: {e}"))?;
-    let key_file = std::fs::File::open(key_path)
-        .map_err(|e| format!("failed to open TLS key {key_path}: {e}"))?;
-
-    let certs: Vec<rustls::pki_types::CertificateDer<'static>> =
-        rustls_pemfile::certs(&mut BufReader::new(cert_file))
-            .filter_map(|r| r.ok())
-            .collect();
-
-    let key = rustls_pemfile::private_key(&mut BufReader::new(key_file))
-        .map_err(|e| format!("failed to parse TLS key: {e}"))?
-        .ok_or("no private key found in key file")?;
-
-    let config = ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(certs, key)
-        .map_err(|e| format!("TLS config error: {e}"))?;
-
-    let acceptor = TlsAcceptor::from(Arc::new(config));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    info!(addr = %addr, "TLS listener started");
-
-    loop {
-        let (stream, peer_addr) = match listener.accept().await {
-            Ok(r) => r,
-            Err(e) => {
-                warn!(error = %e, "TLS accept error");
-                continue;
-            }
-        };
-
-        let acceptor = acceptor.clone();
-        let state = Arc::clone(&state);
-
-        tokio::spawn(async move {
-            let mut tls_stream = match acceptor.accept(stream).await {
-                Ok(s) => s,
-                Err(e) => {
-                    warn!(peer = %peer_addr, error = %e, "TLS handshake failed");
-                    return;
-                }
-            };
-
-            // Read TURN messages over TLS/TCP.
-            // TCP framing: each STUN message is preceded by a 2-byte length prefix (RFC 6062).
-            let mut len_buf = [0u8; 2];
-            while tls_stream.read_exact(&mut len_buf).await.is_ok() {
-                let msg_len = u16::from_be_bytes(len_buf) as usize;
-                if msg_len == 0 || msg_len > 65535 {
-                    break;
-                }
-
-                let mut msg_buf = vec![0u8; msg_len];
-                if tls_stream.read_exact(&mut msg_buf).await.is_err() {
-                    break;
-                }
-
-                // Check for ChannelData
-                if stun::is_channel_data(&msg_buf) {
-                    if let Some((channel, payload)) = stun::parse_channel_data(&msg_buf) {
-                        state.handle_channel_data(channel, payload, peer_addr).await;
-                    }
-                    continue;
-                }
-
-                let msg = match stun::Message::decode(&msg_buf) {
-                    Ok(m) => m,
-                    Err(_) => continue,
-                };
-
-                if let Some(response) = state.handle_stun_message(&msg, &msg_buf, peer_addr).await {
-                    let resp_len = (response.len() as u16).to_be_bytes();
-                    if tls_stream.write_all(&resp_len).await.is_err() {
-                        break;
-                    }
-                    if tls_stream.write_all(&response).await.is_err() {
-                        break;
-                    }
-                }
-            }
-        });
     }
 }
